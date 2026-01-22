@@ -40,8 +40,8 @@ env/
 venv/
 ENV/
 
-# Local database (keep this private)
-seen_events.json
+# NOTE: seen_events.json and tracker_status.json are TRACKED in GitHub
+# because the workflow needs them to remember which events have been seen
 
 # Secrets (NEVER commit these!)
 *.env
