@@ -1,0 +1,66 @@
+#
+# =============================================================================
+# 🚫 GIT IGNORE RULES - .gitignore
+# =============================================================================
+#
+# PURPOSE:
+# --------
+# This file tells Git which files to IGNORE when uploading to GitHub.
+# It prevents accidentally committing sensitive data, temporary files,
+# and system-generated junk.
+#
+# WHAT IT DOES:
+# -------------
+# - Keeps secrets (passwords, API keys) out of GitHub
+# - Prevents uploading temporary Python files
+# - Ignores IDE configuration files
+# - Keeps repository clean and secure
+#
+# WHY THIS MATTERS:
+# -----------------
+# Without this file, you might accidentally upload:
+# - seen_events.json (your personal event history)
+# - .env files (which might contain passwords)
+# - Python cache files (useless to others)
+#
+# WHAT YOU NEED TO CHANGE:
+# -------------------------
+# Nothing! This file is pre-configured with sensible defaults.
+# Just make sure this file exists when you push to GitHub.
+#
+# =============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Local database (keep this private)
+seen_events.json
+
+# Secrets (NEVER commit these!)
+*.env
+.env
+.env.local
+.env.*.local
+config.py
+*secret*
+*password*
+*credential*
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

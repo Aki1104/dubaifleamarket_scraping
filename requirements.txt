@@ -1,0 +1,33 @@
+#
+# =============================================================================
+# 📦 PYTHON DEPENDENCIES - requirements.txt
+# =============================================================================
+#
+# PURPOSE:
+# --------
+# This file lists all Python libraries that need to be installed for the
+# event tracker to work. Think of it as a shopping list for Python packages.
+#
+# WHAT IT DOES:
+# -------------
+# When you run: pip install -r requirements.txt
+# It automatically installs everything listed below
+#
+# HOW TO USE:
+# -----------
+# 1. Open terminal/PowerShell in project folder
+# 2. Run: pip install -r requirements.txt
+# 3. Wait for installation to complete
+#
+# WHAT YOU NEED TO CHANGE:
+# -------------------------
+# Nothing! This file is pre-configured and ready to use.
+#
+# LIBRARIES EXPLAINED:
+# --------------------
+# - requests: Makes HTTP calls to fetch data from websites/APIs
+#   (Used to fetch event data from dubai-fleamarket.com)
+#
+# =============================================================================
+
+requests==2.31.0

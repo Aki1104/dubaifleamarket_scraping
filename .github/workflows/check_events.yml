@@ -1,0 +1,99 @@
+#
+# =============================================================================
+# 🤖 GITHUB ACTIONS WORKFLOW - check_events.yml
+# =============================================================================
+#
+# PURPOSE:
+# --------
+# This file tells GitHub Actions (free automation service) to run our
+# event_tracker.py script automatically every hour, even when your
+# computer is turned off!
+#
+# WHAT IT DOES:
+# -------------
+# 1. Wakes up on a schedule (every hour at minute 0)
+# 2. Sets up Python environment on GitHub's servers
+# 3. Runs event_tracker.py to check for new events
+# 4. Saves the updated seen_events.json file back to the repository
+#
+# HOW IT WORKS:
+# -------------
+# - Uses GitHub's FREE computing resources (2000 minutes/month)
+# - Reads secrets (email/password) safely from repository settings
+# - Runs 24/7 without your computer being on
+#
+# WHAT YOU NEED TO CHANGE:
+# -------------------------
+# - Line 40: Schedule frequency (default: every hour)
+# - GitHub Repo: Add secrets for MY_EMAIL, MY_PASSWORD, TO_EMAIL
+#   (Instructions in README.md)
+#
+# 💡 TIP: You can test this manually by going to Actions tab → 
+#         "Check Dubai Flea Market Events" → "Run workflow"
+#
+# =============================================================================
+
+name: Check Dubai Flea Market Events
+
+on:
+  schedule:
+    # 👇 EDIT THIS LINE to change how often it checks
+    # Current: Every 15 minutes (96 times/day = ~1,440 runs/month)
+    #
+    # ⏱️ TIMING OPTIONS:
+    #   - cron: '*/5 * * * *'   # Every 5 minutes (TOO FREQUENT - exceeds free tier!)
+    #   - cron: '*/15 * * * *'  # Every 15 minutes (1,440 min/month - SAFE ✅)
+    #   - cron: '*/30 * * * *'  # Every 30 minutes (720 min/month - very safe)
+    #   - cron: '0 * * * *'     # Every hour (360 min/month - conservative)
+    #
+    # 💡 FREE TIER LIMIT: 2,000 minutes/month
+    #    Each run takes ~30-60 seconds
+    #    Every 15 min = 96 runs/day * 30 days * 0.5 min = 1,440 minutes ✅
+    #    Every 5 min = 288 runs/day * 30 days * 0.5 min = 4,320 minutes ❌
+    - cron: '*/15 * * * *'  # Every 15 minutes
+
+  # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  check-events:
+    runs-on: ubuntu-latest
+    
+    # Required for pushing changes back to repo
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+      
+      - name: Run event tracker
+        env:
+          # 🔐 These secrets are stored safely in GitHub Settings
+          # DO NOT put actual passwords here!
+          MY_EMAIL: ${{ secrets.MY_EMAIL }}
+          MY_PASSWORD: ${{ secrets.MY_PASSWORD }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          # 📊 Daily summary settings (optional)
+          DAILY_SUMMARY_ENABLED: ${{ secrets.DAILY_SUMMARY_ENABLED }}
+          DAILY_SUMMARY_HOUR: ${{ secrets.DAILY_SUMMARY_HOUR }}
+        run: |
+          python event_tracker.py
+      
+      - name: Commit updated seen events and status
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add seen_events.json tracker_status.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update seen events [skip ci]"
+          git push
