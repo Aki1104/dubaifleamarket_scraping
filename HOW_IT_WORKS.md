@@ -425,4 +425,178 @@ Your notifications work on **ALL devices** where you have email:
 
 ---
 
+---
+
+## 📊 Daily Summary Feature (NEW!)
+
+### What It Does
+
+Sends a daily digest email even when NO new events are found, showing:
+- Statistics (total events, seen events, new events)
+- List of all tracked events with details
+- When you first saw each event
+
+### Why It Matters
+
+- **Peace of Mind:** Confirms the system is working
+- **Event Reference:** See all tracked events in one email
+- **Status Update:** Know what's being monitored
+
+### Daily Summary Flow
+
+```
+┌────────────────────────────────────────────────────────┐
+│  Daily Summary Check (Configured Time)                 │
+└──────────────────┬─────────────────────────────────────┘
+                   │
+         ┌─────────▼─────────┐
+         │ Current UTC Hour  │
+         │ >= Scheduled Hour?│
+         └─────────┬─────────┘
+                   │
+              ┌────┴────┐
+              │         │
+             YES       NO
+              │         │
+              │         └────> ⏰ Wait for next run
+              ▼
+    ┌─────────────────┐
+    │ Already sent    │
+    │ today?          │
+    └────────┬────────┘
+             │
+        ┌────┴────┐
+        │         │
+       YES       NO
+        │         │
+        │         └────────> 📊 Send Summary
+        ▼
+    ✅ Skip (already sent)
+```
+
+### Timing Configuration
+
+**Example Settings:**
+
+| Setting | UTC Time | Philippines Time | Dubai Time |
+|---------|----------|------------------|------------|
+| Hour = 1 | 1:00 AM | 9:00 AM | 5:00 AM |
+| Hour = 5 | 5:00 AM | 1:00 PM | 9:00 AM |
+| Hour = 9 | 9:00 AM | 5:00 PM | 1:00 PM |
+| Hour = 13 | 1:00 PM | 9:00 PM | 5:00 PM |
+
+**Time Zones:**
+- **UTC** = Universal Time
+- **Philippines** = UTC + 8 hours
+- **Dubai** = UTC + 4 hours
+
+### Sample Daily Summary Email
+
+```
+📊 DAILY SUMMARY - Saturday, January 25, 2026
+==================================================
+
+✨ Status: No new events today
+
+📈 Statistics:
+   • Total events on website: 3
+   • Events you've already seen: 5
+   • New events found: 0
+
+📋 TRACKED EVENTS (Most Recent 5):
+--------------------------------------------------
+
+1. 📍 Zabeel Park / Saturday 1 February
+   📅 Posted: 2026-01-15
+   🔗 https://dubai-fleamarket.com/events/zabeel-park-feb-1
+   👀 First seen: 2026-01-15 10:45 UTC
+
+2. 📍 Al Khail Gate / Friday 31 January
+   📅 Posted: 2026-01-10
+   🔗 https://dubai-fleamarket.com/events/al-khail-jan-31
+   👀 First seen: 2026-01-10 14:30 UTC
+
+3. 📍 Times Square Center / Saturday 25 January
+   📅 Posted: 2026-01-05
+   🔗 https://dubai-fleamarket.com/events/times-square-jan-25
+   👀 First seen: 2026-01-05 08:15 UTC
+
+--------------------------------------------------
+
+💡 The tracker is running normally and monitoring for new events.
+   You'll receive an instant notification when new events are posted!
+
+🔗 Check manually: https://dubai-fleamarket.com
+
+==================================================
+🤖 Sent automatically by Dubai Flea Market Tracker
+```
+
+### Technical Improvement: Timing Fix
+
+**Problem:** GitHub Actions cron schedules can be delayed by 5-30 minutes  
+**Old Behavior:** Only sent if run happened at EXACT scheduled hour  
+**Result:** Daily summaries often missed due to timing delays
+
+**Solution:** Time-window based triggering
+
+```python
+# ❌ OLD (Unreliable)
+if current_hour == DAILY_SUMMARY_HOUR and last_summary != today_str:
+    return True
+
+# ✅ NEW (Robust)
+if last_summary == today_str:
+    return False  # Already sent today
+if current_hour >= DAILY_SUMMARY_HOUR:
+    return True  # Send on first run at/after scheduled hour
+```
+
+**Benefits:**
+- ✅ Works even with GitHub Actions delays
+- ✅ Sends once per day, no duplicates
+- ✅ More reliable delivery
+- ✅ Catches missed windows
+
+---
+
+## 🔄 Event Data Storage Evolution
+
+### Old Format (Event IDs Only)
+
+```json
+[7850, 7737, 7736, 7761, 7379]
+```
+
+**Limitations:**
+- No event details for reference
+- Can't show event names in summaries
+- No date tracking
+
+### New Format (Event Details + IDs)
+
+```json
+{
+  "event_ids": [7850, 7737, 7736, 7761, 7379],
+  "event_details": [
+    {
+      "id": 7850,
+      "title": "Zabeel Park / Saturday 1 February",
+      "date_posted": "2026-01-15T10:30:00",
+      "link": "https://dubai-fleamarket.com/events/...",
+      "first_seen": "2026-01-15 10:45 UTC"
+    }
+  ]
+}
+```
+
+**Benefits:**
+- ✅ Rich event details for summaries
+- ✅ Historical reference
+- ✅ Tracks when you first saw each event
+- ✅ Backward compatible with old format
+- ✅ Auto-limits to 50 most recent events
+
+---
+
 **Visual Guide Complete!** For code-level details, see [FILE_GUIDE.md](FILE_GUIDE.md)
