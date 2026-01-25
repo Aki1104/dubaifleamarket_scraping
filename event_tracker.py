@@ -115,9 +115,16 @@ def should_send_daily_summary():
     status = load_status()
     last_summary = status.get('last_daily_summary')
     
-    # Send if: correct hour AND haven't sent today
-    if current_hour == DAILY_SUMMARY_HOUR and last_summary != today_str:
+    # Already sent today? Skip
+    if last_summary == today_str:
+        return False
+    
+    # Send if: at or past the scheduled hour (handles GitHub Action delays)
+    # This ensures we don't miss the window even if the workflow runs late
+    if current_hour >= DAILY_SUMMARY_HOUR:
+        print(f"📊 Daily summary time! (Current hour: {current_hour} UTC, Scheduled: {DAILY_SUMMARY_HOUR} UTC)")
         return True
+    
     return False
 
 
@@ -184,17 +191,51 @@ def validate_event_id(event_id):
 
 
 def load_seen_events():
-    """Load the list of event IDs we've already seen"""
+    """Load the list of events we've already seen (with details)"""
     if os.path.exists(DB_FILE):
         with open(DB_FILE, 'r') as f:
-            return json.load(f)
-    return []
+            data = json.load(f)
+            # Handle both old format (list of IDs) and new format (dict with details)
+            if isinstance(data, list):
+                # Old format: list of IDs - convert to new format
+                return {'event_ids': data, 'event_details': []}
+            return data
+    return {'event_ids': [], 'event_details': []}
 
 
-def save_seen_events(seen_events):
-    """Save the updated list of seen event IDs"""
+def save_seen_events(seen_data):
+    """Save the updated list of seen events with details"""
     with open(DB_FILE, 'w') as f:
-        json.dump(seen_events, f, indent=2)
+        json.dump(seen_data, f, indent=2)
+
+
+def get_seen_event_ids(seen_data):
+    """Get just the event IDs from seen data (handles both formats)"""
+    if isinstance(seen_data, list):
+        return seen_data
+    return seen_data.get('event_ids', [])
+
+
+def add_seen_event(seen_data, event_info):
+    """Add a new event to the seen events data"""
+    if isinstance(seen_data, list):
+        # Convert old format to new format
+        seen_data = {'event_ids': seen_data, 'event_details': []}
+    
+    seen_data['event_ids'].append(event_info['id'])
+    seen_data['event_details'].append({
+        'id': event_info['id'],
+        'title': event_info['title'],
+        'date_posted': event_info['date_posted'],
+        'link': event_info['link'],
+        'first_seen': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    })
+    
+    # Keep only the most recent 50 event details to prevent file from growing too large
+    if len(seen_data['event_details']) > 50:
+        seen_data['event_details'] = seen_data['event_details'][-50:]
+    
+    return seen_data
 
 
 def fetch_events():
@@ -295,8 +336,8 @@ def send_email(new_events):
         return False
 
 
-def send_daily_summary(total_events, seen_count):
-    """Send daily summary email when no new events found"""
+def send_daily_summary(total_events, seen_data, current_events):
+    """Send daily summary email with old events list"""
     recipients = get_recipient_list()
     if not recipients:
         return False
@@ -306,12 +347,18 @@ def send_daily_summary(total_events, seen_count):
         
         # Add test mode indicator to subject
         subject_prefix = "🧪 [TEST] " if TEST_MODE else ""
-        msg['Subject'] = f"{subject_prefix}📊 Dubai Flea Market Daily Summary - No New Events"
+        msg['Subject'] = f"{subject_prefix}📊 Dubai Flea Market Daily Summary"
         msg['From'] = MY_EMAIL
         msg['To'] = ', '.join(recipients)
         
         now = datetime.now(timezone.utc)
         local_now = datetime.now()
+        
+        # Get seen count
+        seen_count = len(get_seen_event_ids(seen_data))
+        
+        # Get event details for display
+        event_details = seen_data.get('event_details', []) if isinstance(seen_data, dict) else []
         
         # Test mode header
         test_header = ""
@@ -329,6 +376,37 @@ def send_daily_summary(total_events, seen_count):
 """
             test_footer = "\n🧪 This was a TEST run - not production"
         
+        # Build old events list section
+        old_events_section = ""
+        if event_details:
+            old_events_section = f"""
+📋 TRACKED EVENTS (Most Recent {len(event_details)}):
+{'-' * 50}
+"""
+            for i, event in enumerate(reversed(event_details), 1):
+                old_events_section += f"""
+{i}. 📍 {event.get('title', 'Unknown')}
+   📅 Posted: {event.get('date_posted', 'Unknown')[:10]}
+   🔗 {event.get('link', 'N/A')}
+   👀 First seen: {event.get('first_seen', 'Unknown')}
+"""
+            old_events_section += f"\n{'-' * 50}\n"
+        else:
+            # If no details stored yet, show current events from API
+            old_events_section = f"""
+📋 CURRENT EVENTS ON WEBSITE:
+{'-' * 50}
+"""
+            for i, event in enumerate(current_events[:10], 1):
+                event_info = extract_event_info(event)
+                if event_info:
+                    old_events_section += f"""
+{i}. 📍 {event_info['title']}
+   📅 Posted: {event_info['date_posted'][:10]}
+   🔗 {event_info['link']}
+"""
+            old_events_section += f"\n{'-' * 50}\n"
+        
         email_body = f"""{test_header}
 📊 DAILY SUMMARY - {now.strftime('%A, %B %d, %Y')}
 {'=' * 50}
@@ -339,6 +417,8 @@ def send_daily_summary(total_events, seen_count):
    • Total events on website: {total_events}
    • Events you've already seen: {seen_count}
    • New events found: 0
+
+{old_events_section}
 
 💡 The tracker is running normally and monitoring for new events.
    You'll receive an instant notification when new events are posted!
@@ -385,9 +465,10 @@ def main():
     recipients = get_recipient_list()
     print(f"📧 Sending to {len(recipients)} recipient(s)")
     
-    # Load previously seen events
-    seen_events = load_seen_events()
-    print(f"📂 Loaded {len(seen_events)} previously seen events")
+    # Load previously seen events (new format with details)
+    seen_data = load_seen_events()
+    seen_event_ids = get_seen_event_ids(seen_data)
+    print(f"📂 Loaded {len(seen_event_ids)} previously seen events")
     
     # Fetch current events
     events = fetch_events()
@@ -407,11 +488,11 @@ def main():
             print(f"⚠️ Skipping event with invalid ID")
             continue
             
-        if event_id not in seen_events:
+        if event_id not in seen_event_ids:
             event_info = extract_event_info(event)
             if event_info:  # Only add if validation passed
                 new_events.append(event_info)
-                seen_events.append(event_id)
+                seen_data = add_seen_event(seen_data, event_info)
     
     # Notify if new events found
     if new_events:
@@ -422,7 +503,7 @@ def main():
         # Send email notification
         if send_email(new_events):
             # Save updated list only if email was sent successfully
-            save_seen_events(seen_events)
+            save_seen_events(seen_data)
             print("💾 Saved updated event list")
     else:
         print("✨ No new events")
@@ -430,7 +511,7 @@ def main():
         # Check if it's time for daily summary
         if should_send_daily_summary():
             print("📊 Sending daily summary...")
-            if send_daily_summary(len(events), len(seen_events)):
+            if send_daily_summary(len(events), seen_data, events):
                 mark_daily_summary_sent()
         else:
             if DAILY_SUMMARY_ENABLED:
