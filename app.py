@@ -2,80 +2,72 @@
 =============================================================================
 🌐 DUBAI FLEA MARKET ADMIN DASHBOARD - app.py
 =============================================================================
-
-PURPOSE:
---------
-Flask web application that provides:
-1. Admin dashboard to monitor the event tracker
-2. Health endpoint for UptimeRobot to keep the service alive
-3. Manual controls to trigger checks, enable/disable features
-4. Real-time status and logs
-
-DEPLOYMENT:
------------
-Deploy to Render.com (free tier) with UptimeRobot pinging /health every 5 min
-
+Flask web application for monitoring and controlling the event tracker.
+Deploy to Render.com with UptimeRobot pinging /health every 5 min.
 =============================================================================
 """
 
-from flask import Flask, render_template, jsonify, request, redirect, url_for
+from flask import Flask, render_template, jsonify, request
 from datetime import datetime, timezone, timedelta
 import json
 import os
 import threading
-import time
 import requests
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import html
-import re
 
 app = Flask(__name__)
 
 # ===== CONFIGURATION =====
 API_URL = "https://dubai-fleamarket.com/wp-json/wp/v2/product?per_page=20"
 
-# File paths - use environment variable for Render compatibility
 DATA_DIR = os.environ.get('DATA_DIR', os.path.dirname(os.path.abspath(__file__)))
 DB_FILE = os.path.join(DATA_DIR, "seen_events.json")
 STATUS_FILE = os.path.join(DATA_DIR, "tracker_status.json")
 LOGS_FILE = os.path.join(DATA_DIR, "activity_logs.json")
 
-# Email configuration from environment
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 MY_EMAIL = os.environ.get('MY_EMAIL', '')
 MY_PASSWORD = os.environ.get('MY_PASSWORD', '')
 TO_EMAIL = os.environ.get('TO_EMAIL', '')
 
-# Feature toggles (can be changed via dashboard)
 CONFIG = {
     'check_interval_minutes': int(os.environ.get('CHECK_INTERVAL', '15')),
     'heartbeat_enabled': os.environ.get('HEARTBEAT_ENABLED', 'true').lower() == 'true',
     'heartbeat_hours': int(os.environ.get('HEARTBEAT_HOURS', '3')),
     'heartbeat_email': os.environ.get('HEARTBEAT_EMAIL', 'steevenparubrub@gmail.com'),
+    'daily_summary_enabled': os.environ.get('DAILY_SUMMARY_ENABLED', 'true').lower() == 'true',
+    'daily_summary_hour': int(os.environ.get('DAILY_SUMMARY_HOUR', '9')),
     'tracker_enabled': True,
     'last_check': None,
     'next_check': None,
     'next_heartbeat': None,
     'total_checks': 0,
     'total_new_events': 0,
+    'emails_sent': 0,
     'uptime_start': datetime.now(timezone.utc).isoformat()
 }
 
-# Activity logs (in-memory, persisted to file)
 ACTIVITY_LOGS = []
 MAX_LOGS = 100
 
-# Background thread control
 checker_thread = None
 stop_checker = threading.Event()
 
 
 # ===== HELPER FUNCTIONS =====
+def get_recipients():
+    """Get list of email recipients."""
+    if not TO_EMAIL:
+        return []
+    return [e.strip() for e in TO_EMAIL.split(',') if e.strip()]
+
+
 def log_activity(message, level="info"):
-    """Add an activity log entry."""
+    """Add activity log entry."""
     global ACTIVITY_LOGS
     entry = {
         'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -85,14 +77,11 @@ def log_activity(message, level="info"):
     ACTIVITY_LOGS.insert(0, entry)
     if len(ACTIVITY_LOGS) > MAX_LOGS:
         ACTIVITY_LOGS = ACTIVITY_LOGS[:MAX_LOGS]
-    
-    # Persist to file
     try:
         with open(LOGS_FILE, 'w') as f:
             json.dump(ACTIVITY_LOGS, f, indent=2)
     except:
         pass
-    
     print(f"[{level.upper()}] {message}")
 
 
@@ -115,12 +104,7 @@ def load_status():
                 return json.load(f)
         except:
             pass
-    return {
-        'last_daily_summary': None,
-        'total_checks': 0,
-        'last_heartbeat': None,
-        'last_check_time': None
-    }
+    return {'last_daily_summary': None, 'total_checks': 0, 'last_heartbeat': None, 'last_check_time': None}
 
 
 def save_status(status):
@@ -171,8 +155,7 @@ def validate_url(url):
         if not url.startswith(('http://', 'https://')):
             return False
         domain = url.split('/')[2].lower()
-        return any(domain == allowed or domain.endswith('.' + allowed) 
-                   for allowed in allowed_domains)
+        return any(domain == allowed or domain.endswith('.' + allowed) for allowed in allowed_domains)
     except:
         return False
 
@@ -180,7 +163,7 @@ def validate_url(url):
 def fetch_events():
     """Fetch events from API."""
     try:
-        response = requests.get(API_URL, timeout=10)
+        response = requests.get(API_URL, timeout=15)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -190,6 +173,7 @@ def fetch_events():
 
 def send_email(subject, body, to_email=None):
     """Send email notification."""
+    global CONFIG
     if not MY_EMAIL or not MY_PASSWORD:
         log_activity("Email credentials not configured", "error")
         return False
@@ -213,6 +197,7 @@ def send_email(subject, body, to_email=None):
             server.login(MY_EMAIL, MY_PASSWORD)
             server.sendmail(MY_EMAIL, recipient, msg.as_string())
         
+        CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
         log_activity(f"Email sent to {recipient}", "success")
         return True
     except Exception as e:
@@ -221,7 +206,7 @@ def send_email(subject, body, to_email=None):
 
 
 def send_new_event_email(events):
-    """Send new event notification."""
+    """Send new event notification to all recipients."""
     subject = f"🎉 {len(events)} New Dubai Flea Market Event(s)!"
     body = f"🎯 {len(events)} new event(s) have been posted!\n\n"
     
@@ -233,10 +218,8 @@ def send_new_event_email(events):
     
     body += "\n🤖 Sent automatically by Dubai Flea Market Tracker"
     
-    # Send to all TO_EMAIL recipients
-    if TO_EMAIL:
-        for email in TO_EMAIL.split(','):
-            send_email(subject, body, email.strip())
+    for email in get_recipients():
+        send_email(subject, body, email)
 
 
 def send_heartbeat():
@@ -245,7 +228,6 @@ def send_heartbeat():
         return False
     
     now = datetime.now(timezone.utc)
-    status = load_status()
     seen_data = load_seen_events()
     
     subject = f"💓 Bot Running OK - Check #{CONFIG['total_checks']} | {now.strftime('%H:%M')} UTC"
@@ -262,17 +244,15 @@ def send_heartbeat():
    • Current Time (UTC): {now.strftime('%Y-%m-%d %H:%M:%S')}
    • Events Already Seen: {len(seen_data.get('event_ids', []))}
    • Total New Events Found: {CONFIG['total_new_events']}
+   • Emails Sent: {CONFIG['emails_sent']}
 
 ⏰ TIMING INFO:
    • Check Interval: Every {CONFIG['check_interval_minutes']} minutes
    • Heartbeat Interval: Every {CONFIG['heartbeat_hours']} hours
    • Uptime Since: {CONFIG['uptime_start']}
 
-🎯 WHAT THIS MEANS:
-   The bot is actively running 24/7 on Render.
-   You will receive an INSTANT email when a new event is posted!
+🎯 The bot is actively running 24/7!
 
-🔗 Dashboard: Check your Render dashboard for logs
 🔗 Manual Check: https://dubai-fleamarket.com
 
 {'=' * 60}
@@ -283,17 +263,56 @@ def send_heartbeat():
     return send_email(subject, body, CONFIG['heartbeat_email'])
 
 
+def send_daily_summary_email():
+    """Send daily summary email."""
+    now = datetime.now(timezone.utc)
+    seen_data = load_seen_events()
+    events = fetch_events()
+    
+    subject = f"📊 Dubai Flea Market Daily Summary - {now.strftime('%B %d, %Y')}"
+    
+    event_count = len(events) if events else 0
+    seen_count = len(seen_data.get('event_ids', []))
+    
+    body = f"""
+{'=' * 60}
+📊 DAILY SUMMARY - {now.strftime('%A, %B %d, %Y')}
+{'=' * 60}
+
+📈 STATISTICS:
+   • Total events on website: {event_count}
+   • Events already tracked: {seen_count}
+   • Total checks performed: {CONFIG['total_checks']}
+   • New events found today: {CONFIG['total_new_events']}
+   • Emails sent: {CONFIG['emails_sent']}
+
+💡 The tracker is running normally!
+   You'll receive an instant notification when new events are posted.
+
+🔗 Check manually: https://dubai-fleamarket.com
+
+{'=' * 60}
+🤖 Sent by Dubai Flea Market Tracker
+{'=' * 60}
+"""
+    
+    success = True
+    for email in get_recipients():
+        if not send_email(subject, body, email):
+            success = False
+    
+    return success
+
+
 def check_for_events():
     """Main event checking logic."""
     log_activity("Starting event check...")
     CONFIG['last_check'] = datetime.now(timezone.utc).isoformat()
     CONFIG['total_checks'] += 1
     
-    # Load seen events
     seen_data = load_seen_events()
     seen_ids = seen_data.get('event_ids', [])
     
-    # Fetch current events
     events = fetch_events()
     if events is None:
         log_activity("Failed to fetch events from API", "error")
@@ -301,7 +320,6 @@ def check_for_events():
     
     log_activity(f"Fetched {len(events)} events from API")
     
-    # Find new events
     new_events = []
     for event in events:
         event_id = event.get('id')
@@ -321,7 +339,6 @@ def check_for_events():
             }
             new_events.append(event_info)
             
-            # Add to seen
             seen_data['event_ids'].append(event_id)
             seen_data.setdefault('event_details', []).append({
                 **event_info,
@@ -331,24 +348,17 @@ def check_for_events():
     if new_events:
         CONFIG['total_new_events'] += len(new_events)
         log_activity(f"🆕 Found {len(new_events)} NEW event(s)!", "success")
-        
-        # Send notification
         send_new_event_email(new_events)
-        
-        # Save updated seen events
         save_seen_events(seen_data)
     else:
         log_activity("✨ No new events")
     
-    # Update status
     status = load_status()
     status['total_checks'] = CONFIG['total_checks']
     status['last_check_time'] = CONFIG['last_check']
     save_status(status)
     
-    # Calculate next check time
-    CONFIG['next_check'] = (datetime.now(timezone.utc) + 
-                           timedelta(minutes=CONFIG['check_interval_minutes'])).isoformat()
+    CONFIG['next_check'] = (datetime.now(timezone.utc) + timedelta(minutes=CONFIG['check_interval_minutes'])).isoformat()
 
 
 def should_send_heartbeat():
@@ -380,21 +390,18 @@ def background_checker():
             try:
                 check_for_events()
                 
-                # Check heartbeat
                 if should_send_heartbeat():
                     log_activity("💓 Sending heartbeat...")
                     if send_heartbeat():
                         status = load_status()
                         status['last_heartbeat'] = datetime.now(timezone.utc).isoformat()
                         save_status(status)
-                        CONFIG['next_heartbeat'] = (datetime.now(timezone.utc) + 
-                                                   timedelta(hours=CONFIG['heartbeat_hours'])).isoformat()
+                        CONFIG['next_heartbeat'] = (datetime.now(timezone.utc) + timedelta(hours=CONFIG['heartbeat_hours'])).isoformat()
                         log_activity("💓 Heartbeat sent!", "success")
                 
             except Exception as e:
                 log_activity(f"Error in checker: {e}", "error")
         
-        # Wait for next check
         stop_checker.wait(timeout=CONFIG['check_interval_minutes'] * 60)
     
     log_activity("Background checker stopped", "warning")
@@ -406,11 +413,8 @@ def dashboard():
     """Main dashboard page."""
     status = load_status()
     seen_data = load_seen_events()
-    
-    # Calculate times
     now = datetime.now(timezone.utc)
     
-    # Time until next check
     next_check_in = "N/A"
     if CONFIG['next_check']:
         try:
@@ -425,7 +429,6 @@ def dashboard():
         except:
             pass
     
-    # Time until next heartbeat
     next_heartbeat_in = "N/A"
     if CONFIG['next_heartbeat']:
         try:
@@ -445,7 +448,8 @@ def dashboard():
         status=status,
         seen_count=len(seen_data.get('event_ids', [])),
         recent_events=seen_data.get('event_details', [])[-10:][::-1],
-        logs=ACTIVITY_LOGS[:20],
+        logs=ACTIVITY_LOGS[:30],
+        recipients=get_recipients(),
         next_check_in=next_check_in,
         next_heartbeat_in=next_heartbeat_in,
         current_time=now.strftime('%Y-%m-%d %H:%M:%S UTC')
@@ -481,27 +485,29 @@ def api_status():
 @app.route('/api/toggle/<feature>', methods=['POST'])
 def toggle_feature(feature):
     """Toggle a feature on/off."""
+    enabled = False
     if feature == 'tracker':
         CONFIG['tracker_enabled'] = not CONFIG['tracker_enabled']
-        log_activity(f"Tracker {'enabled' if CONFIG['tracker_enabled'] else 'disabled'}", 
-                    "success" if CONFIG['tracker_enabled'] else "warning")
+        enabled = CONFIG['tracker_enabled']
+        log_activity(f"Tracker {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
     elif feature == 'heartbeat':
         CONFIG['heartbeat_enabled'] = not CONFIG['heartbeat_enabled']
-        log_activity(f"Heartbeat {'enabled' if CONFIG['heartbeat_enabled'] else 'disabled'}",
-                    "success" if CONFIG['heartbeat_enabled'] else "warning")
+        enabled = CONFIG['heartbeat_enabled']
+        log_activity(f"Heartbeat {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
+    elif feature == 'daily_summary':
+        CONFIG['daily_summary_enabled'] = not CONFIG['daily_summary_enabled']
+        enabled = CONFIG['daily_summary_enabled']
+        log_activity(f"Daily summary {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
     
-    return jsonify({'success': True, 'config': CONFIG})
+    return jsonify({'success': True, 'enabled': enabled, 'config': CONFIG})
 
 
 @app.route('/api/check-now', methods=['POST'])
 def check_now():
     """Trigger an immediate check."""
     log_activity("Manual check triggered", "info")
-    
-    # Run check in background to not block
     thread = threading.Thread(target=check_for_events)
     thread.start()
-    
     return jsonify({'success': True, 'message': 'Check triggered'})
 
 
@@ -514,9 +520,116 @@ def send_heartbeat_now():
         status = load_status()
         status['last_heartbeat'] = datetime.now(timezone.utc).isoformat()
         save_status(status)
-        return jsonify({'success': True, 'message': 'Heartbeat sent'})
+        return jsonify({'success': True, 'message': 'Heartbeat sent successfully!'})
     
     return jsonify({'success': False, 'message': 'Failed to send heartbeat'})
+
+
+@app.route('/api/send-daily-summary', methods=['POST'])
+def send_daily_summary_now():
+    """Send daily summary immediately."""
+    log_activity("Manual daily summary triggered", "info")
+    
+    if send_daily_summary_email():
+        return jsonify({'success': True, 'message': 'Daily summary sent!'})
+    
+    return jsonify({'success': False, 'message': 'Failed to send summary'})
+
+
+@app.route('/api/test-email', methods=['POST'])
+def test_email():
+    """Send test email to a specific recipient."""
+    data = request.get_json()
+    email = data.get('email', '')
+    
+    if not email:
+        return jsonify({'success': False, 'message': 'No email provided'})
+    
+    log_activity(f"Testing email to {email}", "info")
+    
+    now = datetime.now(timezone.utc)
+    subject = f"🧪 Test Email - Dubai Flea Market Tracker"
+    body = f"""
+{'=' * 60}
+🧪 TEST EMAIL
+{'=' * 60}
+
+✅ This is a test email from Dubai Flea Market Tracker!
+
+If you received this email, your email configuration is working correctly.
+
+📊 SYSTEM INFO:
+   • Sent at: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}
+   • Recipient: {email}
+   • Sender: {MY_EMAIL}
+
+🎯 You will receive instant notifications when new events are posted!
+
+{'=' * 60}
+🤖 Dubai Flea Market Tracker
+{'=' * 60}
+"""
+    
+    if send_email(subject, body, email):
+        return jsonify({'success': True, 'message': f'Test email sent to {email}'})
+    
+    return jsonify({'success': False, 'message': 'Failed to send test email'})
+
+
+@app.route('/api/test-all-emails', methods=['POST'])
+def test_all_emails():
+    """Send test email to all recipients."""
+    recipients = get_recipients()
+    if not recipients:
+        return jsonify({'success': False, 'message': 'No recipients configured'})
+    
+    log_activity(f"Testing all {len(recipients)} emails", "info")
+    
+    success_count = 0
+    for email in recipients:
+        now = datetime.now(timezone.utc)
+        subject = f"🧪 Test Email - Dubai Flea Market Tracker"
+        body = f"""
+{'=' * 60}
+🧪 TEST EMAIL - Bulk Test
+{'=' * 60}
+
+✅ This is a test email from Dubai Flea Market Tracker!
+
+📧 Testing all {len(recipients)} configured recipients.
+
+📊 Sent at: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}
+
+{'=' * 60}
+🤖 Dubai Flea Market Tracker
+{'=' * 60}
+"""
+        if send_email(subject, body, email):
+            success_count += 1
+    
+    return jsonify({
+        'success': success_count > 0,
+        'message': f'Sent to {success_count}/{len(recipients)} recipients'
+    })
+
+
+@app.route('/api/live-events')
+def live_events():
+    """Fetch current live events from website."""
+    events = fetch_events()
+    if events is None:
+        return jsonify({'success': False, 'events': [], 'message': 'Failed to fetch'})
+    
+    event_list = []
+    for event in events[:10]:
+        event_list.append({
+            'id': event.get('id'),
+            'title': sanitize_string(event.get('title', {}).get('rendered', 'Unknown')),
+            'date': sanitize_string(event.get('date', 'Unknown'))[:10],
+            'link': event.get('link', '')
+        })
+    
+    return jsonify({'success': True, 'events': event_list})
 
 
 @app.route('/api/logs')
@@ -544,10 +657,7 @@ def start_background_checker():
         checker_thread.start()
 
 
-# Load existing logs on startup
 load_logs()
-
-# Start background checker when app starts
 start_background_checker()
 
 

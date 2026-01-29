@@ -8,315 +8,659 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            --danger-gradient: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-            --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --bg-dark: #0f0f1a;
+            --bg-card: #1a1a2e;
+            --bg-card-hover: #252542;
+            --border-color: #2d2d4a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0b0;
+            --accent-blue: #4f8cff;
+            --accent-green: #00d68f;
+            --accent-red: #ff6b6b;
+            --accent-yellow: #ffc107;
+            --accent-purple: #a855f7;
+            --accent-pink: #ec4899;
         }
+        
+        * { box-sizing: border-box; }
         
         body {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             min-height: 100vh;
-            color: #fff;
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
         }
         
-        .navbar {
-            background: rgba(255,255,255,0.1) !important;
-            backdrop-filter: blur(10px);
+        .navbar-custom {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
         }
         
-        .card {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 16px;
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary) !important;
         }
         
-        .card-header {
-            background: rgba(255,255,255,0.05);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .stat-card {
-            background: var(--primary-gradient);
-            border-radius: 16px;
-            padding: 1.5rem;
-            text-align: center;
-            transition: transform 0.3s ease;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .stat-card.success { background: var(--success-gradient); }
-        .stat-card.danger { background: var(--danger-gradient); }
-        .stat-card.warning { background: var(--warning-gradient); }
-        
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-        }
-        
-        .timer-display {
-            font-size: 1.8rem;
-            font-family: 'Courier New', monospace;
-            background: rgba(0,0,0,0.3);
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            display: inline-block;
-        }
-        
-        .toggle-btn {
-            width: 60px;
-            height: 30px;
-            border-radius: 15px;
-            border: none;
-            cursor: pointer;
-            position: relative;
-            transition: background 0.3s ease;
-        }
-        
-        .toggle-btn.on { background: var(--success-gradient); }
-        .toggle-btn.off { background: #444; }
-        
-        .toggle-btn::after {
-            content: '';
-            position: absolute;
-            width: 26px;
-            height: 26px;
-            background: white;
-            border-radius: 50%;
-            top: 2px;
-            transition: left 0.3s ease;
-        }
-        
-        .toggle-btn.on::after { left: 32px; }
-        .toggle-btn.off::after { left: 2px; }
-        
-        .log-entry {
-            padding: 0.5rem 1rem;
-            border-left: 3px solid #667eea;
-            margin-bottom: 0.5rem;
-            background: rgba(255,255,255,0.05);
-            border-radius: 0 8px 8px 0;
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 20px;
             font-size: 0.85rem;
+            font-weight: 500;
         }
         
-        .log-entry.success { border-color: #38ef7d; }
-        .log-entry.error { border-color: #f45c43; }
-        .log-entry.warning { border-color: #f5576c; }
+        .status-badge.online { background: rgba(0, 214, 143, 0.15); color: var(--accent-green); }
+        .status-badge.offline { background: rgba(255, 107, 107, 0.15); color: var(--accent-red); }
         
-        .event-item {
-            background: rgba(255,255,255,0.05);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .btn-action {
-            background: var(--primary-gradient);
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            color: white;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        .btn-action:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-            color: white;
-        }
-        
-        .pulse {
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
             animation: pulse 2s infinite;
         }
         
         @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
         }
         
-        .status-indicator {
-            width: 12px;
-            height: 12px;
+        .main-container { padding: 2rem; max-width: 1600px; margin: 0 auto; }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            border-color: var(--accent-blue);
+            box-shadow: 0 8px 32px rgba(79, 140, 255, 0.1);
+        }
+        
+        .card-header {
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .card-header i { margin-right: 10px; color: var(--accent-blue); }
+        .card-body { padding: 1.25rem; }
+        
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+        
+        .stat-card.blue::before { background: var(--accent-blue); }
+        .stat-card.green::before { background: var(--accent-green); }
+        .stat-card.yellow::before { background: var(--accent-yellow); }
+        .stat-card.red::before { background: var(--accent-red); }
+        .stat-card.purple::before { background: var(--accent-purple); }
+        
+        .stat-card:hover { transform: translateY(-4px); border-color: var(--accent-blue); }
+        
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .stat-card.blue .stat-icon { background: rgba(79, 140, 255, 0.15); color: var(--accent-blue); }
+        .stat-card.green .stat-icon { background: rgba(0, 214, 143, 0.15); color: var(--accent-green); }
+        .stat-card.yellow .stat-icon { background: rgba(255, 193, 7, 0.15); color: var(--accent-yellow); }
+        .stat-card.red .stat-icon { background: rgba(255, 107, 107, 0.15); color: var(--accent-red); }
+        .stat-card.purple .stat-icon { background: rgba(168, 85, 247, 0.15); color: var(--accent-purple); }
+        
+        .stat-number { font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem; }
+        .stat-label { color: var(--text-secondary); font-size: 0.85rem; }
+        
+        .timer-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        
+        .timer-display {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .timer-label { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem; }
+        
+        .btn-primary-custom {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 600;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(79, 140, 255, 0.3);
+            color: white;
+        }
+        
+        .btn-outline-custom {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 600;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-outline-custom:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+        
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .toggle-switch { position: relative; width: 56px; height: 28px; cursor: pointer; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        
+        .toggle-slider {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--border-color);
+            border-radius: 28px;
+            transition: 0.3s;
+        }
+        
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
             border-radius: 50%;
-            display: inline-block;
-            margin-right: 8px;
+            transition: 0.3s;
         }
         
-        .status-indicator.online { background: #38ef7d; animation: pulse 2s infinite; }
-        .status-indicator.offline { background: #f45c43; }
+        .toggle-switch input:checked + .toggle-slider { background: var(--accent-green); }
+        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(28px); }
+        
+        .email-test-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+        }
+        
+        .email-test-card:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--accent-blue); }
+        .email-info { display: flex; align-items: center; gap: 12px; }
+        
+        .email-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .email-address { font-size: 0.9rem; color: var(--text-primary); }
+        .email-status { font-size: 0.75rem; color: var(--text-secondary); }
+        
+        .btn-test-email {
+            background: rgba(79, 140, 255, 0.1);
+            border: 1px solid var(--accent-blue);
+            color: var(--accent-blue);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .btn-test-email:hover { background: var(--accent-blue); color: white; }
+        .btn-test-email.testing { opacity: 0.7; pointer-events: none; }
+        .btn-test-email.success { background: var(--accent-green); border-color: var(--accent-green); color: white; }
+        .btn-test-email.failed { background: var(--accent-red); border-color: var(--accent-red); color: white; }
+        
+        .log-container { max-height: 400px; overflow-y: auto; }
+        
+        .log-entry {
+            padding: 0.75rem 1rem;
+            border-left: 3px solid var(--accent-blue);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+        }
+        
+        .log-entry.success { border-color: var(--accent-green); }
+        .log-entry.error { border-color: var(--accent-red); }
+        .log-entry.warning { border-color: var(--accent-yellow); }
+        .log-time { color: var(--text-secondary); font-size: 0.75rem; font-family: 'Courier New', monospace; }
+        
+        .event-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.3s ease;
+        }
+        
+        .event-item:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--accent-green); }
+        .event-title { font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; }
+        .event-meta { font-size: 0.8rem; color: var(--text-secondary); }
+        .event-link { color: var(--accent-blue); text-decoration: none; font-size: 0.85rem; }
+        .event-link:hover { text-decoration: underline; }
+        
+        .action-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+        
+        .action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.25rem;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .action-btn:hover {
+            background: rgba(79, 140, 255, 0.1);
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+        }
+        
+        .action-btn i { font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--accent-blue); }
+        .action-btn span { font-size: 0.85rem; font-weight: 500; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+        
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+        
+        .toast-custom {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease;
+        }
+        
+        .toast-custom.success { border-color: var(--accent-green); }
+        .toast-custom.error { border-color: var(--accent-red); }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container { padding: 1rem; }
+            .stat-number { font-size: 1.5rem; }
+            .timer-display { font-size: 1.75rem; }
+            .action-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark mb-4">
-        <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1">
-                <i class="bi bi-shop"></i> Dubai Flea Market Tracker
-            </span>
-            <span class="text-muted">
-                <span class="status-indicator {{ 'online' if config.tracker_enabled else 'offline' }}"></span>
-                {{ 'Running' if config.tracker_enabled else 'Stopped' }}
-            </span>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <nav class="navbar-custom">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="navbar-brand">
+                <i class="bi bi-shop-window"></i> Dubai Flea Market Tracker
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-secondary" id="serverTime">{{ current_time }}</span>
+                <div class="status-badge {{ 'online' if config.tracker_enabled else 'offline' }}" id="statusBadge">
+                    <span class="pulse-dot"></span>
+                    <span id="statusText">{{ 'Running' if config.tracker_enabled else 'Stopped' }}</span>
+                </div>
+            </div>
         </div>
     </nav>
 
-    <div class="container-fluid px-4">
+    <div class="main-container">
         <!-- Stats Row -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-3">
-                <div class="stat-card">
-                    <i class="bi bi-search fs-1 mb-2"></i>
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="stat-card blue">
+                    <div class="stat-icon"><i class="bi bi-search"></i></div>
                     <div class="stat-number">{{ config.total_checks }}</div>
-                    <div>Total Checks</div>
+                    <div class="stat-label">Total Checks</div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="stat-card success">
-                    <i class="bi bi-calendar-event fs-1 mb-2"></i>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="stat-card green">
+                    <div class="stat-icon"><i class="bi bi-calendar-check"></i></div>
                     <div class="stat-number">{{ seen_count }}</div>
-                    <div>Events Tracked</div>
+                    <div class="stat-label">Events Tracked</div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="stat-card warning">
-                    <i class="bi bi-star-fill fs-1 mb-2"></i>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="stat-card yellow">
+                    <div class="stat-icon"><i class="bi bi-star-fill"></i></div>
                     <div class="stat-number">{{ config.total_new_events }}</div>
-                    <div>New Events Found</div>
+                    <div class="stat-label">New Found</div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="stat-card danger">
-                    <i class="bi bi-clock fs-1 mb-2"></i>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="stat-card purple">
+                    <div class="stat-icon"><i class="bi bi-envelope-check"></i></div>
+                    <div class="stat-number">{{ config.emails_sent or 0 }}</div>
+                    <div class="stat-label">Emails Sent</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="stat-card red">
+                    <div class="stat-icon"><i class="bi bi-people"></i></div>
+                    <div class="stat-number">{{ recipients|length }}</div>
+                    <div class="stat-label">Recipients</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="stat-card blue">
+                    <div class="stat-icon"><i class="bi bi-clock-history"></i></div>
                     <div class="stat-number" id="uptime">--</div>
-                    <div>Uptime</div>
+                    <div class="stat-label">Uptime</div>
                 </div>
             </div>
         </div>
 
         <!-- Timers Row -->
-        <div class="row g-4 mb-4">
+        <div class="row g-3 mb-4">
             <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <i class="bi bi-stopwatch"></i> Next Event Check
+                <div class="timer-card">
+                    <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
+                        <i class="bi bi-stopwatch" style="font-size: 1.5rem; color: var(--accent-blue);"></i>
+                        <span class="text-secondary">Next Event Check</span>
                     </div>
-                    <div class="card-body text-center">
-                        <div class="timer-display" id="next-check-timer">{{ next_check_in }}</div>
-                        <p class="text-muted mt-2 mb-0">Checking every {{ config.check_interval_minutes }} minutes</p>
-                    </div>
+                    <div class="timer-display" id="nextCheckTimer">{{ next_check_in }}</div>
+                    <div class="timer-label">Checking every {{ config.check_interval_minutes }} minutes</div>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <i class="bi bi-heart-pulse"></i> Next Heartbeat Email
+                <div class="timer-card">
+                    <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
+                        <i class="bi bi-heart-pulse" style="font-size: 1.5rem; color: var(--accent-red);"></i>
+                        <span class="text-secondary">Next Heartbeat Email</span>
                     </div>
-                    <div class="card-body text-center">
-                        <div class="timer-display" id="next-heartbeat-timer">{{ next_heartbeat_in }}</div>
-                        <p class="text-muted mt-2 mb-0">Sending to {{ config.heartbeat_email }} every {{ config.heartbeat_hours }}h</p>
-                    </div>
+                    <div class="timer-display" id="nextHeartbeatTimer">{{ next_heartbeat_in }}</div>
+                    <div class="timer-label">Every {{ config.heartbeat_hours }}h to {{ config.heartbeat_email }}</div>
                 </div>
             </div>
         </div>
 
         <div class="row g-4">
-            <!-- Controls -->
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <i class="bi bi-gear"></i> Controls
-                    </div>
+            <!-- Left Column -->
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header"><span><i class="bi bi-lightning-charge"></i> Quick Actions</span></div>
                     <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <span><i class="bi bi-robot"></i> Event Tracker</span>
-                            <button class="toggle-btn {{ 'on' if config.tracker_enabled else 'off' }}" 
-                                    id="toggle-tracker" onclick="toggleFeature('tracker')"></button>
+                        <div class="action-grid">
+                            <div class="action-btn" onclick="checkNow()">
+                                <i class="bi bi-search"></i>
+                                <span>Check Events</span>
+                            </div>
+                            <div class="action-btn" onclick="sendHeartbeat()">
+                                <i class="bi bi-heart"></i>
+                                <span>Send Heartbeat</span>
+                            </div>
+                            <div class="action-btn" onclick="sendDailySummary()">
+                                <i class="bi bi-file-text"></i>
+                                <span>Daily Summary</span>
+                            </div>
+                            <div class="action-btn" onclick="testAllEmails()">
+                                <i class="bi bi-envelope-check"></i>
+                                <span>Test All Emails</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header"><span><i class="bi bi-gear"></i> System Controls</span></div>
+                    <div class="card-body">
+                        <div class="toggle-container">
+                            <div>
+                                <div class="fw-semibold"><i class="bi bi-robot me-2"></i>Event Tracker</div>
+                                <small class="text-secondary">Monitor for new events</small>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleTracker" {{ 'checked' if config.tracker_enabled else '' }} onchange="toggleFeature('tracker')">
+                                <span class="toggle-slider"></span>
+                            </label>
                         </div>
                         
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <span><i class="bi bi-heart"></i> Heartbeat Emails</span>
-                            <button class="toggle-btn {{ 'on' if config.heartbeat_enabled else 'off' }}" 
-                                    id="toggle-heartbeat" onclick="toggleFeature('heartbeat')"></button>
+                        <div class="toggle-container">
+                            <div>
+                                <div class="fw-semibold"><i class="bi bi-heart me-2"></i>Heartbeat Emails</div>
+                                <small class="text-secondary">Every {{ config.heartbeat_hours }} hours</small>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleHeartbeat" {{ 'checked' if config.heartbeat_enabled else '' }} onchange="toggleFeature('heartbeat')">
+                                <span class="toggle-slider"></span>
+                            </label>
                         </div>
                         
-                        <hr class="border-secondary">
+                        <div class="toggle-container">
+                            <div>
+                                <div class="fw-semibold"><i class="bi bi-calendar-day me-2"></i>Daily Summary</div>
+                                <small class="text-secondary">At {{ config.daily_summary_hour or 9 }}:00 UTC</small>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleDailySummary" {{ 'checked' if config.daily_summary_enabled else '' }} onchange="toggleFeature('daily_summary')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        
+                        <hr class="border-secondary my-3">
                         
                         <div class="d-grid gap-2">
-                            <button class="btn-action" onclick="checkNow()">
-                                <i class="bi bi-lightning-charge"></i> Check Now
+                            <button class="btn btn-outline-custom" onclick="refreshData()">
+                                <i class="bi bi-arrow-clockwise me-2"></i>Refresh Dashboard
                             </button>
-                            <button class="btn-action" onclick="sendHeartbeat()">
-                                <i class="bi bi-envelope-heart"></i> Send Heartbeat
-                            </button>
-                            <button class="btn btn-outline-danger" onclick="clearLogs()">
-                                <i class="bi bi-trash"></i> Clear Logs
+                            <button class="btn btn-outline-custom" onclick="clearLogs()">
+                                <i class="bi bi-trash me-2"></i>Clear Logs
                             </button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Activity Logs -->
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-header d-flex justify-content-between">
-                        <span><i class="bi bi-journal-text"></i> Activity Logs</span>
-                        <span class="badge bg-secondary">{{ logs|length }}</span>
+                <div class="card">
+                    <div class="card-header">
+                        <span><i class="bi bi-people"></i> Email Recipients</span>
+                        <span class="badge bg-primary">{{ recipients|length }}</span>
                     </div>
-                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                        {% for log in logs %}
-                        <div class="log-entry {{ log.level }}">
-                            <small class="text-muted">{{ log.timestamp[:19] }}</small>
-                            <div>{{ log.message }}</div>
+                    <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                        {% for email in recipients %}
+                        <div class="email-test-card">
+                            <div class="email-info">
+                                <div class="email-avatar">{{ email[0]|upper }}</div>
+                                <div>
+                                    <div class="email-address">{{ email }}</div>
+                                    <div class="email-status" id="email-status-{{ loop.index }}">Ready to test</div>
+                                </div>
+                            </div>
+                            <button class="btn-test-email" id="btn-test-{{ loop.index }}" onclick="testEmail('{{ email }}', {{ loop.index }})">
+                                <i class="bi bi-send me-1"></i>Test
+                            </button>
                         </div>
                         {% else %}
-                        <p class="text-muted text-center">No logs yet</p>
+                        <p class="text-secondary text-center mb-0">No recipients configured</p>
                         {% endfor %}
                     </div>
                 </div>
             </div>
 
-            <!-- Recent Events -->
-            <div class="col-md-4">
+            <!-- Middle Column -->
+            <div class="col-lg-4">
                 <div class="card h-100">
-                    <div class="card-header d-flex justify-content-between">
-                        <span><i class="bi bi-calendar-check"></i> Recent Events</span>
-                        <span class="badge bg-success">{{ recent_events|length }}</span>
+                    <div class="card-header">
+                        <span><i class="bi bi-journal-text"></i> Activity Logs</span>
+                        <span class="badge bg-secondary">{{ logs|length }}</span>
                     </div>
-                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                        {% for event in recent_events %}
-                        <div class="event-item">
-                            <div class="fw-bold">📍 {{ event.title[:40] }}{% if event.title|length > 40 %}...{% endif %}</div>
-                            <small class="text-muted">{{ event.first_seen }}</small>
-                            <div><a href="{{ event.link }}" target="_blank" class="text-info">View Event →</a></div>
+                    <div class="card-body log-container" id="logContainer">
+                        {% for log in logs %}
+                        <div class="log-entry {{ log.level }}">
+                            <div class="log-time">{{ log.timestamp[11:19] }}</div>
+                            <div>{{ log.message }}</div>
                         </div>
                         {% else %}
-                        <p class="text-muted text-center">No events tracked yet</p>
+                        <p class="text-secondary text-center">No activity logs yet</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <span><i class="bi bi-globe"></i> Live Events on Website</span>
+                        <button class="btn btn-sm btn-outline-custom" onclick="fetchLiveEvents()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                    <div class="card-body" id="liveEventsContainer" style="max-height: 300px; overflow-y: auto;">
+                        <p class="text-secondary text-center mb-0">
+                            <i class="bi bi-arrow-up-circle me-2"></i>Click refresh to load
+                        </p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span><i class="bi bi-clock-history"></i> Tracked Events History</span>
+                        <span class="badge bg-success">{{ recent_events|length }}</span>
+                    </div>
+                    <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                        {% for event in recent_events %}
+                        <div class="event-item">
+                            <div class="event-title">
+                                <i class="bi bi-calendar-event" style="color: var(--accent-green);"></i>
+                                {{ event.title[:35] }}{% if event.title|length > 35 %}...{% endif %}
+                            </div>
+                            <div class="event-meta mb-2">
+                                <i class="bi bi-clock me-1"></i>{{ event.first_seen }}
+                            </div>
+                            <a href="{{ event.link }}" target="_blank" class="event-link">
+                                <i class="bi bi-box-arrow-up-right me-1"></i>View Event
+                            </a>
+                        </div>
+                        {% else %}
+                        <p class="text-secondary text-center mb-0">No events tracked yet</p>
                         {% endfor %}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Footer -->
-        <div class="text-center text-muted mt-4 pb-4">
-            <small>
-                <i class="bi bi-clock"></i> Server Time: {{ current_time }} |
-                <i class="bi bi-github"></i> Dubai Flea Market Event Tracker
-            </small>
+        <div class="footer">
+            <div class="mb-2">
+                <i class="bi bi-github me-2"></i>Dubai Flea Market Event Tracker
+                <span class="mx-2">|</span>
+                <i class="bi bi-clock me-1"></i><span id="footerTime">{{ current_time }}</span>
+            </div>
+            <div class="text-secondary">Auto-refresh in <span id="refreshCountdown">30</span>s</div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Calculate uptime
         const uptimeStart = new Date('{{ config.uptime_start }}');
+        let refreshCountdown = 30;
+        
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast-custom ${type}`;
+            toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}" style="color: var(--accent-${type === 'success' ? 'green' : 'red'});"></i><span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
         
         function updateUptime() {
             const now = new Date();
@@ -326,47 +670,146 @@
             document.getElementById('uptime').textContent = `${hours}h ${mins}m`;
         }
         
-        setInterval(updateUptime, 1000);
-        updateUptime();
-
-        // Toggle feature
+        function updateCountdown() {
+            refreshCountdown--;
+            document.getElementById('refreshCountdown').textContent = refreshCountdown;
+            if (refreshCountdown <= 0) location.reload();
+        }
+        
         async function toggleFeature(feature) {
-            const btn = document.getElementById(`toggle-${feature}`);
-            const response = await fetch(`/api/toggle/${feature}`, { method: 'POST' });
-            const data = await response.json();
-            
-            if (data.success) {
-                const isOn = feature === 'tracker' ? data.config.tracker_enabled : data.config.heartbeat_enabled;
-                btn.className = `toggle-btn ${isOn ? 'on' : 'off'}`;
-            }
+            try {
+                const response = await fetch(`/api/toggle/${feature}`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    showToast(`${feature.replace('_', ' ')} ${data.enabled ? 'enabled' : 'disabled'}`, 'success');
+                    if (feature === 'tracker') {
+                        const badge = document.getElementById('statusBadge');
+                        const text = document.getElementById('statusText');
+                        badge.className = `status-badge ${data.enabled ? 'online' : 'offline'}`;
+                        text.textContent = data.enabled ? 'Running' : 'Stopped';
+                    }
+                }
+            } catch (e) { showToast('Failed to toggle feature', 'error'); }
         }
-
-        // Check now
+        
         async function checkNow() {
-            const response = await fetch('/api/check-now', { method: 'POST' });
-            const data = await response.json();
-            if (data.success) {
-                alert('Check triggered! Refresh in a few seconds to see results.');
+            showToast('Checking for new events...', 'success');
+            try {
+                await fetch('/api/check-now', { method: 'POST' });
+                setTimeout(() => location.reload(), 2000);
+            } catch (e) { showToast('Failed to trigger check', 'error'); }
+        }
+        
+        async function sendHeartbeat() {
+            showToast('Sending heartbeat email...', 'success');
+            try {
+                const response = await fetch('/api/send-heartbeat', { method: 'POST' });
+                const data = await response.json();
+                showToast(data.message, data.success ? 'success' : 'error');
+            } catch (e) { showToast('Failed to send heartbeat', 'error'); }
+        }
+        
+        async function sendDailySummary() {
+            showToast('Sending daily summary...', 'success');
+            try {
+                const response = await fetch('/api/send-daily-summary', { method: 'POST' });
+                const data = await response.json();
+                showToast(data.message, data.success ? 'success' : 'error');
+            } catch (e) { showToast('Failed to send summary', 'error'); }
+        }
+        
+        async function testEmail(email, index) {
+            const btn = document.getElementById(`btn-test-${index}`);
+            const status = document.getElementById(`email-status-${index}`);
+            btn.classList.add('testing');
+            btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Sending...';
+            status.textContent = 'Sending test email...';
+            
+            try {
+                const response = await fetch('/api/test-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email })
+                });
+                const data = await response.json();
+                btn.classList.remove('testing');
+                if (data.success) {
+                    btn.classList.add('success');
+                    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Sent!';
+                    status.textContent = 'Test email sent!';
+                    showToast(`Test email sent to ${email}`, 'success');
+                } else {
+                    btn.classList.add('failed');
+                    btn.innerHTML = '<i class="bi bi-x-lg me-1"></i>Failed';
+                    status.textContent = data.message || 'Failed';
+                    showToast(`Failed: ${email}`, 'error');
+                }
+                setTimeout(() => {
+                    btn.className = 'btn-test-email';
+                    btn.innerHTML = '<i class="bi bi-send me-1"></i>Test';
+                    status.textContent = 'Ready to test';
+                }, 3000);
+            } catch (e) {
+                btn.classList.remove('testing');
+                btn.classList.add('failed');
+                btn.innerHTML = '<i class="bi bi-x-lg me-1"></i>Error';
+                showToast('Connection error', 'error');
             }
         }
-
-        // Send heartbeat
-        async function sendHeartbeat() {
-            const response = await fetch('/api/send-heartbeat', { method: 'POST' });
-            const data = await response.json();
-            alert(data.message);
+        
+        async function testAllEmails() {
+            showToast('Testing all recipients...', 'success');
+            try {
+                const response = await fetch('/api/test-all-emails', { method: 'POST' });
+                const data = await response.json();
+                showToast(data.message, data.success ? 'success' : 'error');
+            } catch (e) { showToast('Failed to test emails', 'error'); }
         }
-
-        // Clear logs
+        
+        async function fetchLiveEvents() {
+            const container = document.getElementById('liveEventsContainer');
+            container.innerHTML = '<p class="text-center text-secondary"><i class="bi bi-hourglass-split me-2"></i>Loading...</p>';
+            try {
+                const response = await fetch('/api/live-events');
+                const data = await response.json();
+                if (data.events && data.events.length > 0) {
+                    container.innerHTML = data.events.map(event => `
+                        <div class="event-item">
+                            <div class="event-title"><i class="bi bi-shop" style="color: var(--accent-blue);"></i>${event.title.substring(0, 35)}${event.title.length > 35 ? '...' : ''}</div>
+                            <div class="event-meta mb-2"><i class="bi bi-calendar me-1"></i>${event.date}</div>
+                            <a href="${event.link}" target="_blank" class="event-link"><i class="bi bi-box-arrow-up-right me-1"></i>View</a>
+                        </div>
+                    `).join('');
+                    showToast(`Loaded ${data.events.length} events`, 'success');
+                } else {
+                    container.innerHTML = '<p class="text-secondary text-center">No events found</p>';
+                }
+            } catch (e) {
+                container.innerHTML = '<p class="text-danger text-center">Failed to load</p>';
+                showToast('Failed to fetch events', 'error');
+            }
+        }
+        
+        function refreshData() { location.reload(); }
+        
         async function clearLogs() {
             if (confirm('Clear all activity logs?')) {
                 await fetch('/api/clear-logs', { method: 'POST' });
-                location.reload();
+                document.getElementById('logContainer').innerHTML = '<p class="text-secondary text-center">Logs cleared</p>';
+                showToast('Logs cleared', 'success');
             }
         }
-
-        // Auto-refresh every 30 seconds
-        setTimeout(() => location.reload(), 30000);
+        
+        setInterval(updateUptime, 1000);
+        setInterval(updateCountdown, 1000);
+        updateUptime();
+        
+        setInterval(() => {
+            const now = new Date();
+            const timeStr = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+            document.getElementById('serverTime').textContent = timeStr;
+            document.getElementById('footerTime').textContent = timeStr;
+        }, 1000);
     </script>
 </body>
 </html>
