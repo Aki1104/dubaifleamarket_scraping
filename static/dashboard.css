@@ -946,6 +946,17 @@ body {
     color: white;
 }
 
+/* Timer expired indicator - pulsing orange */
+.timer-expired {
+    color: var(--warning) !important;
+    animation: timerPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .terminal-window {

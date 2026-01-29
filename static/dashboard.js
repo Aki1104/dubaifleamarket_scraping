@@ -8,6 +8,7 @@ var pendingSuccessMessage = null;
 var pendingMaskedEmail = null;
 var autoScrollEnabled = true;
 var lastConsoleCount = 0;
+var timerRefreshAttempts = 0;
 
 function formatTime(seconds, showHours = false) {
     if (seconds <= 0) return showHours ? '00:00:00' : '00:00';
@@ -29,10 +30,67 @@ function updateTimers() {
     const checkElement = document.getElementById('timer-check');
     const heartbeatElement = document.getElementById('timer-heartbeat');
     
-    if (checkElement) checkElement.textContent = formatTime(nextCheckSeconds);
-    if (heartbeatElement) heartbeatElement.textContent = formatTime(nextHeartbeatSeconds, true);
+    if (checkElement) {
+        checkElement.textContent = formatTime(nextCheckSeconds);
+        // Visual indicator when timer is at 0 (may need refresh)
+        if (nextCheckSeconds <= 0) {
+            checkElement.classList.add('timer-expired');
+        } else {
+            checkElement.classList.remove('timer-expired');
+        }
+    }
+    if (heartbeatElement) {
+        heartbeatElement.textContent = formatTime(nextHeartbeatSeconds, true);
+        if (nextHeartbeatSeconds <= 0) {
+            heartbeatElement.classList.add('timer-expired');
+        } else {
+            heartbeatElement.classList.remove('timer-expired');
+        }
+    }
+    
+    // Auto-refresh timers if both are at 0 (server may have restarted)
+    if (nextCheckSeconds <= 0 && nextHeartbeatSeconds <= 0) {
+        timerRefreshAttempts++;
+        if (timerRefreshAttempts >= 10 && timerRefreshAttempts % 30 === 0) {
+            // Try to refresh timers every 30 seconds after initial 10 second wait
+            refreshTimersFromServer();
+        }
+    } else {
+        timerRefreshAttempts = 0;
+    }
 }
 
+async function refreshTimersFromServer() {
+    try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+        
+        if (data.config) {
+            // Recalculate timer values from next_check and next_heartbeat
+            const now = new Date();
+            
+            if (data.config.next_check) {
+                const nextCheck = new Date(data.config.next_check);
+                const checkDiff = Math.max(0, Math.floor((nextCheck - now) / 1000));
+                if (checkDiff > 0) {
+                    nextCheckSeconds = checkDiff;
+                    console.log('Timer refreshed: next check in', checkDiff, 'seconds');
+                }
+            }
+            
+            if (data.config.next_heartbeat) {
+                const nextHeartbeat = new Date(data.config.next_heartbeat);
+                const heartbeatDiff = Math.max(0, Math.floor((nextHeartbeat - now) / 1000));
+                if (heartbeatDiff > 0) {
+                    nextHeartbeatSeconds = heartbeatDiff;
+                    console.log('Timer refreshed: next heartbeat in', heartbeatDiff, 'seconds');
+                }
+            }
+        }
+    } catch (e) {
+        console.log('Failed to refresh timers from server');
+    }
+}
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;

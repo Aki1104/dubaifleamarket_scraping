@@ -280,8 +280,10 @@ def add_to_email_history(recipient, subject, success, error_msg=''):
     if len(history) > 500:
         history = history[-500:]
     
+    now = datetime.now(timezone.utc)
     entry = {
-        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'timestamp': now.isoformat(),
+        'timestamp_formatted': now.strftime('%b %d at %I:%M %p'),
         'recipient': recipient,
         'recipient_masked': mask_email(recipient),
         'subject': sanitize_string(subject, 100),
@@ -291,6 +293,14 @@ def add_to_email_history(recipient, subject, success, error_msg=''):
     
     history.append(entry)
     save_email_history(history)
+
+def format_timestamp(iso_string):
+    """Format ISO timestamp to readable format like 'Jan 30 at 02:45 PM'."""
+    try:
+        dt = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
+        return dt.strftime('%b %d at %I:%M %p')
+    except:
+        return iso_string[:16] if iso_string else '--'
 
 # ===== HELPER FUNCTIONS =====
 def get_all_recipients():
@@ -523,7 +533,7 @@ def send_heartbeat():
 
 📊 CURRENT STATS:
    • Check Number: #{CONFIG['total_checks']}
-   • Current Time (UTC): {now.strftime('%Y-%m-%d %H:%M:%S')}
+   • Current Time (UTC): {now.strftime('%B %d, %Y at %I:%M:%S %p')}
    • Events Already Seen: {len(seen_data.get('event_ids', []))}
    • Total New Events Found: {CONFIG['total_new_events']}
    • Emails Sent: {CONFIG['emails_sent']}
@@ -647,7 +657,7 @@ def check_for_events():
             seen_data['event_ids'].append(event_id)
             seen_data.setdefault('event_details', []).append({
                 **event_info,
-                'first_seen': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+                'first_seen': datetime.now(timezone.utc).strftime('%b %d, %Y at %I:%M %p')
             })
     
     if new_events:
@@ -695,13 +705,18 @@ def should_send_heartbeat():
         return True
 
 def background_checker():
-    """Background thread that runs the event checker."""
+    """Background thread that runs the event checker with self-healing."""
     log_activity("🚀 Background checker started", "success")
+    console_log("🚀 Background checker thread initialized", "success")
+    
+    consecutive_errors = 0
+    max_consecutive_errors = 5
     
     while not stop_checker.is_set():
         if CONFIG['tracker_enabled']:
             try:
                 check_for_events()
+                consecutive_errors = 0  # Reset error counter on success
                 
                 if should_send_heartbeat():
                     log_activity("💓 Sending scheduled heartbeat...")
@@ -713,11 +728,23 @@ def background_checker():
                         log_activity("💓 Heartbeat sent!", "success")
                 
             except Exception as e:
-                log_activity(f"Error in checker: {str(e)[:50]}", "error")
+                consecutive_errors += 1
+                error_msg = str(e)[:50]
+                log_activity(f"Error in checker ({consecutive_errors}/{max_consecutive_errors}): {error_msg}", "error")
+                console_log(f"⚠️ Checker error ({consecutive_errors}/{max_consecutive_errors}): {error_msg}", "error")
+                
+                # If too many consecutive errors, wait longer before retry
+                if consecutive_errors >= max_consecutive_errors:
+                    console_log("🔄 Too many errors, entering recovery mode (5 min cooldown)", "warning")
+                    log_activity("⚠️ Entering recovery mode due to repeated errors", "warning")
+                    stop_checker.wait(timeout=300)  # Wait 5 minutes
+                    consecutive_errors = 0  # Reset after cooldown
+                    console_log("🔄 Recovery cooldown complete, resuming normal operation", "info")
         
         stop_checker.wait(timeout=CONFIG['check_interval_minutes'] * 60)
     
     log_activity("Background checker stopped", "warning")
+    console_log("⏹️ Background checker stopped", "warning")
 
 # ===== ROUTES =====
 @app.route('/')
@@ -776,18 +803,28 @@ def dashboard():
         next_check_seconds=next_check_seconds,
         next_heartbeat_seconds=next_heartbeat_seconds,
         uptime_str=uptime_str,
-        current_time=now.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        current_time=now.strftime('%B %d, %Y at %I:%M %p UTC'),
         email_history=load_email_history()[-20:][::-1]
     )
 
 @app.route('/health')
 def health():
     """Health check endpoint for UptimeRobot - no rate limit."""
+    # Check if background checker is running
+    checker_alive = checker_thread is not None and checker_thread.is_alive()
+    
+    # If checker died, the watchdog should restart it soon
+    if not checker_alive:
+        console_log("⚠️ Health check: Background checker not running!", "warning")
+    
     return jsonify({
         'status': 'healthy',
         'tracker_enabled': CONFIG['tracker_enabled'],
         'total_checks': CONFIG['total_checks'],
-        'uptime_start': CONFIG['uptime_start']
+        'uptime_start': CONFIG['uptime_start'],
+        'checker_running': checker_alive,
+        'next_check': CONFIG['next_check'],
+        'next_heartbeat': CONFIG['next_heartbeat']
     })
 
 @app.route('/api/status')
@@ -983,7 +1020,7 @@ def test_email():
 If you received this, your email configuration is working.
 
 📊 SYSTEM INFO:
-   • Sent at: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}
+   • Sent at: {now.strftime('%B %d, %Y at %I:%M %p UTC')}
 
 🎯 You will receive instant notifications when new events are posted!
 
@@ -1022,7 +1059,7 @@ def test_all_emails():
 
 📧 Testing all {len(recipients)} configured recipients.
 
-📊 Sent at: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}
+📊 Sent at: {now.strftime('%B %d, %Y at %I:%M %p UTC')}
 
 {'=' * 60}
 🤖 Dubai Flea Market Tracker
@@ -1104,6 +1141,33 @@ def start_background_checker():
         checker_thread = threading.Thread(target=background_checker, daemon=True)
         checker_thread.start()
 
+def watchdog_thread():
+    """Watchdog that monitors and restarts the background checker if it dies."""
+    global checker_thread
+    console_log("🐕 Watchdog thread started - monitoring background checker", "debug")
+    
+    while True:
+        try:
+            time.sleep(60)  # Check every minute
+            
+            if checker_thread is None or not checker_thread.is_alive():
+                console_log("🔄 WATCHDOG: Background checker not running, restarting...", "warning")
+                log_activity("🔄 Watchdog restarting background checker", "warning")
+                
+                # Reset timer values on restart
+                CONFIG['next_check'] = (datetime.now(timezone.utc) + timedelta(minutes=CONFIG['check_interval_minutes'])).isoformat()
+                CONFIG['next_heartbeat'] = (datetime.now(timezone.utc) + timedelta(hours=CONFIG['heartbeat_hours'])).isoformat()
+                
+                start_background_checker()
+                console_log("✅ WATCHDOG: Background checker restarted successfully", "success")
+        except Exception as e:
+            console_log(f"⚠️ Watchdog error: {str(e)[:50]}", "error")
+
+def start_watchdog():
+    """Start the watchdog thread."""
+    watchdog = threading.Thread(target=watchdog_thread, daemon=True)
+    watchdog.start()
+
 load_logs()
 load_recipient_status()
 
@@ -1119,6 +1183,7 @@ console_log("✅ System initialized successfully", "success")
 console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
 
 start_background_checker()
+start_watchdog()  # Start the watchdog to auto-restart if checker dies
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

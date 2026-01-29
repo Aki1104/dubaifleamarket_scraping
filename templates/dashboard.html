@@ -312,7 +312,7 @@
                                 <div class="email-hist-left">
                                     <div class="email-hist-email">{{ entry.recipient_masked }}</div>
                                     <div class="email-hist-subject">{{ entry.subject[:40] }}</div>
-                                    <div class="email-hist-time">{{ entry.timestamp[:16] }}</div>
+                                    <div class="email-hist-time">{{ entry.timestamp_formatted or entry.timestamp[:16] }}</div>
                                 </div>
                                 <div class="email-hist-status">
                                     <div class="status-dot {% if entry.success %}success{% else %}error{% endif %}"></div>
