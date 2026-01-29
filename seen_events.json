@@ -1,4 +1,43 @@
 {
-  "event_ids": [7850, 7737, 7736, 7761, 7379],
-  "event_details": []
+  "event_ids": [
+    7850,
+    7737,
+    7736,
+    7761,
+    7379,
+    8504,
+    8394,
+    8388,
+    8387
+  ],
+  "event_details": [
+    {
+      "id": 8504,
+      "title": "Reef Mall / Indoor / Sunday 08 February 2026",
+      "date_posted": "2026-01-29T14:01:33",
+      "link": "https://dubai-fleamarket.com/product/reef-mall-indoor-sunday-08-february-2026/",
+      "first_seen": "2026-01-29 13:05 UTC"
+    },
+    {
+      "id": 8394,
+      "title": "Festival of Treasures / Expo Village Park / Saturday 14 February 2026",
+      "date_posted": "2026-01-27T13:21:39",
+      "link": "https://dubai-fleamarket.com/product/festival-of-treasures-expo-village-park-saturday-14-february-2026/",
+      "first_seen": "2026-01-29 13:05 UTC"
+    },
+    {
+      "id": 8388,
+      "title": "Discovery Gardens Park / Saturday 21 February 2026",
+      "date_posted": "2026-01-27T12:33:23",
+      "link": "https://dubai-fleamarket.com/product/discovery-gardens-park-saturday-21-february-2026/",
+      "first_seen": "2026-01-29 13:05 UTC"
+    },
+    {
+      "id": 8387,
+      "title": "Al Twar Park 1 / Sunday 15 February 2026",
+      "date_posted": "2026-01-27T12:18:50",
+      "link": "https://dubai-fleamarket.com/product/al-twar-park-1-sunday-15-february-2026/",
+      "first_seen": "2026-01-29 13:05 UTC"
+    }
+  ]
 }

@@ -1,0 +1,82 @@
+[
+  {
+    "timestamp": "2026-01-29T13:35:34.264528+00:00",
+    "message": "Email credentials not configured",
+    "level": "error"
+  },
+  {
+    "timestamp": "2026-01-29T13:35:34.263560+00:00",
+    "message": "\ud83d\udc93 Sending heartbeat...",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:35:34.262770+00:00",
+    "message": "Failed to fetch events from API",
+    "level": "error"
+  },
+  {
+    "timestamp": "2026-01-29T13:35:34.261870+00:00",
+    "message": "Failed to fetch events: HTTPSConnectionPool(host='dubai-fleamarket.com', port=443): Read timed out. (read timeout=10)",
+    "level": "error"
+  },
+  {
+    "timestamp": "2026-01-29T13:35:23.166173+00:00",
+    "message": "Starting event check...",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:20:23.158020+00:00",
+    "message": "Email credentials not configured",
+    "level": "error"
+  },
+  {
+    "timestamp": "2026-01-29T13:20:23.156726+00:00",
+    "message": "\ud83d\udc93 Sending heartbeat...",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:20:23.147316+00:00",
+    "message": "\u2728 No new events",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:20:23.146564+00:00",
+    "message": "Fetched 6 events from API",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:20:20.668465+00:00",
+    "message": "Starting event check...",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:05:20.660133+00:00",
+    "message": "Email credentials not configured",
+    "level": "error"
+  },
+  {
+    "timestamp": "2026-01-29T13:05:20.649674+00:00",
+    "message": "\ud83d\udc93 Sending heartbeat...",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:05:20.634860+00:00",
+    "message": "\ud83c\udd95 Found 4 NEW event(s)!",
+    "level": "success"
+  },
+  {
+    "timestamp": "2026-01-29T13:05:20.634184+00:00",
+    "message": "Fetched 6 events from API",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:05:14.155171+00:00",
+    "message": "Starting event check...",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-29T13:05:14.154386+00:00",
+    "message": "\ud83d\ude80 Background checker started",
+    "level": "success"
+  }
+]
