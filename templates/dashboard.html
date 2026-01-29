@@ -318,13 +318,15 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <!-- Initialize timer variables from Flask -->
+    <!-- Load external JavaScript first -->
+    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+    
+    <!-- Initialize timer variables from Flask AFTER loading the JS file -->
     <script>
         nextCheckSeconds = {{ next_check_seconds }};
         nextHeartbeatSeconds = {{ next_heartbeat_seconds }};
+        // Immediately update timers with the values
+        updateTimers();
     </script>
-
-    <!-- Load external JavaScript -->
-    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 </body>
 </html>

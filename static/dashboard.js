@@ -1,10 +1,11 @@
-// Timer variables - these are initialized with template data in HTML
-let nextCheckSeconds;
-let nextHeartbeatSeconds;
-let pendingAction = null;
-let pendingData = null;
-let pendingSuccessMessage = null;
-let pendingMaskedEmail = null;
+// Timer variables - initialized by inline script in HTML before this file loads
+// Using var instead of let to allow hoisting and global scope assignment
+var nextCheckSeconds = 0;
+var nextHeartbeatSeconds = 0;
+var pendingAction = null;
+var pendingData = null;
+var pendingSuccessMessage = null;
+var pendingMaskedEmail = null;
 
 function formatTime(seconds, showHours = false) {
     if (seconds <= 0) return showHours ? '00:00:00' : '00:00';
