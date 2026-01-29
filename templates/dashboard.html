@@ -174,21 +174,22 @@
                     </div>
                     <div class="card-body">
                         {% for email in all_recipients %}
-                        <div class="recipient-item {% if not recipient_status[email].enabled %}disabled{% endif %}">
+                        {% set status = recipient_status.get(email, {'enabled': True}) %}
+                        <div class="recipient-item {% if not status.get('enabled', True) %}disabled{% endif %}">
                             <div class="recipient-info">
                                 <div class="recipient-avatar">{{ email[0]|upper }}</div>
                                 <div>
                                     <div class="recipient-email">{{ mask_email(email) }}</div>
-                                    <div class="recipient-status-badge {% if recipient_status[email].enabled %}enabled{% else %}disabled{% endif %}">
-                                        <i class="bi {% if recipient_status[email].enabled %}bi-check-circle{% else %}bi-x-circle{% endif %}"></i>
-                                        {% if recipient_status[email].enabled %}Enabled{% else %}Disabled{% endif %}
+                                    <div class="recipient-status-badge {% if status.get('enabled', True) %}enabled{% else %}disabled{% endif %}">
+                                        <i class="bi {% if status.get('enabled', True) %}bi-check-circle{% else %}bi-x-circle{% endif %}"></i>
+                                        {% if status.get('enabled', True) %}Enabled{% else %}Disabled{% endif %}
                                     </div>
                                 </div>
                             </div>
                             <div class="recipient-actions">
                                 <button class="btn btn-sm btn-outline" onclick="showFullEmail('{{ mask_email(email) }}')">Show</button>
                                 <button class="btn btn-sm btn-outline" onclick="toggleRecipient('{{ email }}')">
-                                    <i class="bi {% if recipient_status[email].enabled %}bi-pause{% else %}bi-play{% endif %}"></i>
+                                    <i class="bi {% if status.get('enabled', True) %}bi-pause{% else %}bi-play{% endif %}"></i>
                                 </button>
                             </div>
                         </div>
