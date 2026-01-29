@@ -78,14 +78,70 @@
 
         <!-- Timers -->
         <section class="section-gap">
-            <div class="grid grid-2">
+            <div class="grid grid-3">
                 <div class="timer-card">
                     <div class="timer-label">Next Event Check</div>
                     <div class="timer-value" id="timer-check">--:--</div>
+                    <div class="timer-sub">Every {{ config.check_interval_minutes }} min</div>
                 </div>
                 <div class="timer-card">
                     <div class="timer-label">Next Heartbeat</div>
                     <div class="timer-value" id="timer-heartbeat">--:--:--</div>
+                    <div class="timer-sub">Every {{ config.heartbeat_hours }} hours</div>
+                </div>
+                <div class="timer-card">
+                    <div class="timer-label">Daily Summary</div>
+                    <div class="timer-value schedule-time">{{ "%02d:00"|format(config.daily_summary_hour) }} UTC</div>
+                    <div class="timer-sub">{% if config.daily_summary_enabled %}<i class="bi bi-check-circle"></i> Enabled{% else %}<i class="bi bi-x-circle"></i> Disabled{% endif %}</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Schedule Information -->
+        <section class="section-gap">
+            <div class="card schedule-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="bi bi-clock-history"></i>
+                        Schedule Information
+                    </div>
+                    <span class="badge info">Current Settings</span>
+                </div>
+                <div class="card-body">
+                    <div class="schedule-grid">
+                        <div class="schedule-item">
+                            <div class="schedule-icon"><i class="bi bi-search"></i></div>
+                            <div class="schedule-info">
+                                <div class="schedule-label">Event Check Interval</div>
+                                <div class="schedule-value">Every {{ config.check_interval_minutes }} minutes</div>
+                            </div>
+                        </div>
+                        <div class="schedule-item">
+                            <div class="schedule-icon"><i class="bi bi-heart-pulse"></i></div>
+                            <div class="schedule-info">
+                                <div class="schedule-label">Heartbeat Interval</div>
+                                <div class="schedule-value">Every {{ config.heartbeat_hours }} hours</div>
+                            </div>
+                        </div>
+                        <div class="schedule-item">
+                            <div class="schedule-icon"><i class="bi bi-calendar-check"></i></div>
+                            <div class="schedule-info">
+                                <div class="schedule-label">Daily Summary Time</div>
+                                <div class="schedule-value">{{ "%02d:00"|format(config.daily_summary_hour) }} UTC ({{ "%d"|format(config.daily_summary_hour) if config.daily_summary_hour <= 12 else "%d"|format(config.daily_summary_hour - 12) }}:00 {{ "AM" if config.daily_summary_hour < 12 else "PM" }} UTC)</div>
+                            </div>
+                        </div>
+                        <div class="schedule-item">
+                            <div class="schedule-icon"><i class="bi bi-envelope-at"></i></div>
+                            <div class="schedule-info">
+                                <div class="schedule-label">Heartbeat Email</div>
+                                <div class="schedule-value">{{ mask_email(config.heartbeat_email) }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="schedule-note">
+                        <i class="bi bi-info-circle"></i>
+                        <span>Settings can be changed via environment variables. Feature coming soon: Dashboard settings editor!</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -289,6 +345,85 @@
                             <p>No recipients configured</p>
                         </div>
                         {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Events Data Section -->
+        <section class="section-gap">
+            <div class="section-header">
+                <h2 class="section-title"><i class="bi bi-calendar-event"></i> Events Data</h2>
+                <p class="section-desc">Currently fetched events and past tracked events</p>
+            </div>
+            <div class="grid grid-2">
+                <!-- Currently Fetched Events (Live from API) -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="bi bi-broadcast"></i>
+                            Live API Events
+                        </div>
+                        <span class="badge info" id="live-events-count">{{ live_events|length }} events</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="events-list" id="live-events-list" style="max-height: 350px; overflow-y: auto;">
+                            {% for event in live_events %}
+                            <div class="event-item">
+                                <div class="event-icon"><i class="bi bi-calendar-event"></i></div>
+                                <div class="event-content">
+                                    <div class="event-title">{{ event.title[:60] }}{% if event.title|length > 60 %}...{% endif %}</div>
+                                    <div class="event-meta">
+                                        <span><i class="bi bi-hash"></i> ID: {{ event.id }}</span>
+                                        <span><i class="bi bi-calendar3"></i> {{ event.date_posted[:10] if event.date_posted else 'N/A' }}</span>
+                                    </div>
+                                </div>
+                                <a href="{{ event.link }}" target="_blank" class="event-link-btn">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </div>
+                            {% else %}
+                            <div class="empty-state">
+                                <i class="bi bi-cloud-slash"></i>
+                                <p>No events fetched yet</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Past Tracked Events (From Database) -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="bi bi-database"></i>
+                            Past Tracked Events
+                        </div>
+                        <span class="badge success">{{ seen_count }} total</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="events-list" style="max-height: 350px; overflow-y: auto;">
+                            {% for event in recent_events %}
+                            <div class="event-item past">
+                                <div class="event-icon"><i class="bi bi-check2-circle"></i></div>
+                                <div class="event-content">
+                                    <div class="event-title">{{ event.title[:60] }}{% if event.title|length > 60 %}...{% endif %}</div>
+                                    <div class="event-meta">
+                                        <span><i class="bi bi-hash"></i> ID: {{ event.id }}</span>
+                                        <span><i class="bi bi-eye"></i> Seen: {{ event.first_seen or 'N/A' }}</span>
+                                    </div>
+                                </div>
+                                <a href="{{ event.link }}" target="_blank" class="event-link-btn">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </div>
+                            {% else %}
+                            <div class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>No past events tracked yet</p>
+                            </div>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
             </div>

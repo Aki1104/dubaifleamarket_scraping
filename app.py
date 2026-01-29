@@ -791,11 +791,27 @@ def dashboard():
     all_recipients = get_all_recipients()
     recipient_status = load_recipient_status()
     
+    # Get live events from API for display (cached from last fetch)
+    live_events = []
+    try:
+        # Use cached API data if available, otherwise fetch fresh
+        cached_events = fetch_events()
+        if cached_events:
+            live_events = [{
+                'id': e.get('id', 0),
+                'title': sanitize_string(e.get('title', {}).get('rendered', 'Unknown'), 200),
+                'date_posted': sanitize_string(e.get('date', 'Unknown'), 50),
+                'link': e.get('link', '#')
+            } for e in cached_events[:15]]  # Limit to 15 for display
+    except:
+        live_events = []
+    
     return render_template('dashboard.html',
         config=CONFIG,
         status=status,
         seen_count=len(seen_data.get('event_ids', [])),
         recent_events=seen_data.get('event_details', [])[-10:][::-1],
+        live_events=live_events,
         logs=ACTIVITY_LOGS[:50],
         all_recipients=all_recipients,
         recipient_status=recipient_status,
