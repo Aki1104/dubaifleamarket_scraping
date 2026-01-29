@@ -113,6 +113,96 @@
                     <i class="bi bi-envelope-paper-heart"></i>
                     <span>Test All Emails</span>
                 </button>
+                <button class="action-btn" onclick="secureAction('/api/test-api', 'API Test Complete!')">
+                    <i class="bi bi-hdd-network"></i>
+                    <span>Test API Connection</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- System Console (Terminal) -->
+        <section class="section-gap">
+            <div class="section-header">
+                <h2 class="section-title"><i class="bi bi-terminal"></i> System Console</h2>
+                <p class="section-desc">Real-time terminal output & API diagnostics</p>
+            </div>
+            <div class="grid grid-2">
+                <!-- Terminal Console -->
+                <div class="card terminal-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="bi bi-terminal-fill"></i>
+                            Live Terminal
+                        </div>
+                        <div class="terminal-controls">
+                            <button class="btn btn-sm btn-outline" onclick="toggleAutoScroll()" id="auto-scroll-btn">
+                                <i class="bi bi-arrow-down-circle"></i> Auto
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="secureAction('/api/clear-console', 'Console cleared!')">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="terminal-window" id="terminal-output">
+                            <div class="terminal-line welcome">
+                                <span class="term-time">--:--:--</span>
+                                <span class="term-msg">Loading console output...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Diagnostics -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="bi bi-speedometer2"></i>
+                            API Diagnostics
+                        </div>
+                        <span class="badge" id="api-status-badge">Connecting...</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="diagnostics-grid">
+                            <div class="diag-item">
+                                <div class="diag-label">Last Response Time</div>
+                                <div class="diag-value" id="diag-response-time">--</div>
+                            </div>
+                            <div class="diag-item">
+                                <div class="diag-label">Status Code</div>
+                                <div class="diag-value" id="diag-status-code">--</div>
+                            </div>
+                            <div class="diag-item">
+                                <div class="diag-label">Response Size</div>
+                                <div class="diag-value" id="diag-response-size">--</div>
+                            </div>
+                            <div class="diag-item">
+                                <div class="diag-label">Events Returned</div>
+                                <div class="diag-value" id="diag-events-count">--</div>
+                            </div>
+                            <div class="diag-item">
+                                <div class="diag-label">Total API Calls</div>
+                                <div class="diag-value" id="diag-total-calls">--</div>
+                            </div>
+                            <div class="diag-item">
+                                <div class="diag-label">Failed Calls</div>
+                                <div class="diag-value" id="diag-failed-calls">--</div>
+                            </div>
+                            <div class="diag-item">
+                                <div class="diag-label">Avg Response</div>
+                                <div class="diag-value" id="diag-avg-time">--</div>
+                            </div>
+                            <div class="diag-item">
+                                <div class="diag-label">Last Error</div>
+                                <div class="diag-value error-text-sm" id="diag-last-error">None</div>
+                            </div>
+                        </div>
+                        <div class="api-endpoint-info">
+                            <div class="endpoint-label">API Endpoint</div>
+                            <code class="endpoint-url">dubai-fleamarket.com/wp-json/wp/v2/product</code>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 

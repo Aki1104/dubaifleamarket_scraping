@@ -186,6 +186,37 @@ CONFIG = {
 ACTIVITY_LOGS = []
 MAX_LOGS = 100
 
+# ===== SYSTEM CONSOLE - Terminal-like logging =====
+SYSTEM_CONSOLE = []
+MAX_CONSOLE_LOGS = 200
+
+API_DIAGNOSTICS = {
+    'last_request_time': None,
+    'last_response_time_ms': 0,
+    'last_status_code': None,
+    'last_response_size': 0,
+    'last_events_count': 0,
+    'total_api_calls': 0,
+    'failed_api_calls': 0,
+    'avg_response_time_ms': 0,
+    'last_error': None,
+    'last_successful_call': None
+}
+
+def console_log(message, log_type="info"):
+    """Add detailed log to system console - terminal style."""
+    global SYSTEM_CONSOLE
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    entry = {
+        'time': timestamp,
+        'type': log_type,  # info, success, error, warning, api, debug
+        'msg': message
+    }
+    SYSTEM_CONSOLE.insert(0, entry)
+    if len(SYSTEM_CONSOLE) > MAX_CONSOLE_LOGS:
+        SYSTEM_CONSOLE = SYSTEM_CONSOLE[:MAX_CONSOLE_LOGS]
+    print(f"[CONSOLE][{log_type.upper()}] {message}")
+
 checker_thread = None
 stop_checker = threading.Event()
 
@@ -341,12 +372,75 @@ def save_seen_events(seen_data):
         log_activity(f"Failed to save events: {e}", "error")
 
 def fetch_events():
-    """Fetch events from API."""
+    """Fetch events from API with detailed diagnostics."""
+    global API_DIAGNOSTICS
+    import time
+    
+    start_time = time.time()
+    API_DIAGNOSTICS['last_request_time'] = datetime.now(timezone.utc).isoformat()
+    API_DIAGNOSTICS['total_api_calls'] = API_DIAGNOSTICS.get('total_api_calls', 0) + 1
+    
+    console_log(f"📡 Initiating API request to dubai-fleamarket.com...", "api")
+    console_log(f"   └─ URL: {API_URL}", "debug")
+    console_log(f"   └─ Method: GET | Timeout: 15s", "debug")
+    
     try:
         response = requests.get(API_URL, timeout=15)
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        
+        API_DIAGNOSTICS['last_response_time_ms'] = elapsed_ms
+        API_DIAGNOSTICS['last_status_code'] = response.status_code
+        API_DIAGNOSTICS['last_response_size'] = len(response.content)
+        
+        # Update average response time
+        total_calls = API_DIAGNOSTICS['total_api_calls']
+        prev_avg = API_DIAGNOSTICS.get('avg_response_time_ms', 0)
+        API_DIAGNOSTICS['avg_response_time_ms'] = int(((prev_avg * (total_calls - 1)) + elapsed_ms) / total_calls)
+        
+        console_log(f"✅ API Response received", "success")
+        console_log(f"   └─ Status: {response.status_code} | Time: {elapsed_ms}ms | Size: {len(response.content)} bytes", "debug")
+        
         response.raise_for_status()
-        return response.json()
+        
+        data = response.json()
+        events_count = len(data) if isinstance(data, list) else 0
+        API_DIAGNOSTICS['last_events_count'] = events_count
+        API_DIAGNOSTICS['last_successful_call'] = datetime.now(timezone.utc).isoformat()
+        API_DIAGNOSTICS['last_error'] = None
+        
+        console_log(f"📦 Parsed {events_count} events from API response", "info")
+        
+        # Log event titles for debugging
+        if events_count > 0:
+            for i, event in enumerate(data[:3]):  # Show first 3 events
+                title = event.get('title', {}).get('rendered', 'Unknown')[:40]
+                console_log(f"   └─ Event {i+1}: {title}...", "debug")
+            if events_count > 3:
+                console_log(f"   └─ ... and {events_count - 3} more events", "debug")
+        
+        return data
+        
+    except requests.exceptions.Timeout:
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        API_DIAGNOSTICS['failed_api_calls'] = API_DIAGNOSTICS.get('failed_api_calls', 0) + 1
+        API_DIAGNOSTICS['last_error'] = 'Timeout after 15s'
+        console_log(f"⏱️ API request timed out after {elapsed_ms}ms", "error")
+        log_activity("API request timed out", "error")
+        return None
+        
+    except requests.exceptions.ConnectionError as e:
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        API_DIAGNOSTICS['failed_api_calls'] = API_DIAGNOSTICS.get('failed_api_calls', 0) + 1
+        API_DIAGNOSTICS['last_error'] = 'Connection failed'
+        console_log(f"🔌 Connection error: {str(e)[:50]}", "error")
+        log_activity(f"Connection error: {str(e)[:30]}", "error")
+        return None
+        
     except Exception as e:
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        API_DIAGNOSTICS['failed_api_calls'] = API_DIAGNOSTICS.get('failed_api_calls', 0) + 1
+        API_DIAGNOSTICS['last_error'] = str(e)[:100]
+        console_log(f"❌ API Error: {str(e)[:80]}", "error")
         log_activity(f"Failed to fetch events: {e}", "error")
         return None
 
@@ -405,6 +499,7 @@ def send_new_event_email(events):
     
     body += "\n🤖 Sent automatically by Dubai Flea Market Tracker"
     
+    console_log(f"📧 Sending new event notification to {len(get_recipients())} recipient(s)", "info")
     for email in get_recipients():
         send_email(subject, body, email)
 
@@ -413,6 +508,7 @@ def send_heartbeat():
     if not CONFIG['heartbeat_enabled']:
         return False
     
+    console_log("💓 Sending heartbeat email...", "info")
     now = datetime.now(timezone.utc)
     seen_data = load_seen_events()
     
@@ -446,10 +542,16 @@ def send_heartbeat():
 {'=' * 60}
 """
     
-    return send_email(subject, body, CONFIG['heartbeat_email'])
+    result = send_email(subject, body, CONFIG['heartbeat_email'])
+    if result:
+        console_log("✅ Heartbeat email sent successfully", "success")
+    else:
+        console_log("❌ Failed to send heartbeat email", "error")
+    return result
 
 def send_daily_summary_email():
     """Send daily summary email."""
+    console_log("📊 Generating daily summary...", "info")
     now = datetime.now(timezone.utc)
     seen_data = load_seen_events()
     events = fetch_events()
@@ -489,35 +591,54 @@ def send_daily_summary_email():
     return success
 
 def check_for_events():
-    """Main event checking logic."""
+    """Main event checking logic with detailed console logging."""
+    console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+    console_log("🔍 STARTING EVENT CHECK CYCLE", "info")
+    console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+    
     log_activity("🔍 Starting event check...")
     CONFIG['last_check'] = datetime.now(timezone.utc).isoformat()
     CONFIG['total_checks'] += 1
     
+    console_log(f"📊 Check #{CONFIG['total_checks']} initiated", "info")
+    console_log(f"   └─ Interval: Every {CONFIG['check_interval_minutes']} minutes", "debug")
+    
+    # Load existing seen events
+    console_log("📂 Loading seen events database...", "info")
     seen_data = load_seen_events()
     seen_ids = seen_data.get('event_ids', [])
+    console_log(f"   └─ Found {len(seen_ids)} previously seen events in database", "debug")
     
+    # Fetch events from API
     events = fetch_events()
     if events is None:
+        console_log("❌ Event check failed - API returned no data", "error")
         log_activity("Failed to fetch events from API", "error")
         return
     
     log_activity(f"📡 Fetched {len(events)} events from API")
     
+    # Compare events
+    console_log("🔄 Comparing events with database...", "info")
     new_events = []
     for event in events:
         event_id = event.get('id')
         if not isinstance(event_id, int) or event_id <= 0:
+            console_log(f"   ⚠️ Skipping invalid event ID: {event_id}", "warning")
             continue
         
         if event_id not in seen_ids:
             link = event.get('link', '')
             if not validate_url(link):
+                console_log(f"   ⚠️ Skipping event {event_id} - invalid URL", "warning")
                 continue
+            
+            title = sanitize_string(event.get('title', {}).get('rendered', 'Unknown'), 200)
+            console_log(f"   🆕 NEW EVENT DETECTED: {title[:50]}...", "success")
             
             event_info = {
                 'id': event_id,
-                'title': sanitize_string(event.get('title', {}).get('rendered', 'Unknown'), 200),
+                'title': title,
                 'date_posted': sanitize_string(event.get('date', 'Unknown'), 50),
                 'link': link
             }
@@ -531,10 +652,17 @@ def check_for_events():
     
     if new_events:
         CONFIG['total_new_events'] += len(new_events)
+        console_log(f"🎉 FOUND {len(new_events)} NEW EVENT(S)!", "success")
         log_activity(f"🆕 Found {len(new_events)} NEW event(s)!", "success")
+        
+        console_log("📧 Sending email notifications...", "info")
         send_new_event_email(new_events)
+        
+        console_log("💾 Saving updated database...", "info")
         save_seen_events(seen_data)
+        console_log("   └─ Database saved successfully", "debug")
     else:
+        console_log("✨ No new events found - all events already seen", "info")
         log_activity("✨ No new events found")
     
     status = load_status()
@@ -542,7 +670,10 @@ def check_for_events():
     status['last_check_time'] = CONFIG['last_check']
     save_status(status)
     
-    CONFIG['next_check'] = (datetime.now(timezone.utc) + timedelta(minutes=CONFIG['check_interval_minutes'])).isoformat()
+    next_check_time = datetime.now(timezone.utc) + timedelta(minutes=CONFIG['check_interval_minutes'])
+    CONFIG['next_check'] = next_check_time.isoformat()
+    console_log(f"⏰ Next check scheduled: {next_check_time.strftime('%H:%M:%S UTC')}", "info")
+    console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
 
 def should_send_heartbeat():
     """Check if heartbeat is due."""
@@ -672,6 +803,75 @@ def api_status():
         'seen_count': len(seen_data.get('event_ids', [])),
         'logs': ACTIVITY_LOGS[:20]
     })
+
+@app.route('/api/console')
+@rate_limit
+def api_console():
+    """API endpoint for system console logs."""
+    return jsonify({
+        'console': SYSTEM_CONSOLE[:100],
+        'diagnostics': API_DIAGNOSTICS
+    })
+
+@app.route('/api/diagnostics')
+@rate_limit
+def api_diagnostics():
+    """API endpoint for detailed API diagnostics."""
+    seen_data = load_seen_events()
+    
+    return jsonify({
+        'api': API_DIAGNOSTICS,
+        'system': {
+            'uptime_start': CONFIG['uptime_start'],
+            'tracker_enabled': CONFIG['tracker_enabled'],
+            'check_interval_minutes': CONFIG['check_interval_minutes'],
+            'heartbeat_enabled': CONFIG['heartbeat_enabled'],
+            'heartbeat_hours': CONFIG['heartbeat_hours'],
+            'total_checks': CONFIG['total_checks'],
+            'total_new_events': CONFIG['total_new_events'],
+            'emails_sent': CONFIG['emails_sent'],
+            'total_events_tracked': len(seen_data.get('event_ids', [])),
+            'recipients_count': len(get_all_recipients()),
+            'enabled_recipients': len(get_recipients())
+        },
+        'console_entries': len(SYSTEM_CONSOLE),
+        'activity_log_entries': len(ACTIVITY_LOGS)
+    })
+
+@app.route('/api/test-api', methods=['POST'])
+@rate_limit
+@require_password
+def test_api_connection():
+    """Test API connection - requires password."""
+    console_log("🧪 MANUAL API TEST INITIATED", "info")
+    log_activity("🧪 Manual API test triggered", "info")
+    
+    events = fetch_events()
+    
+    if events is not None:
+        console_log(f"✅ API test successful - {len(events)} events returned", "success")
+        return jsonify({
+            'success': True,
+            'events_count': len(events),
+            'response_time_ms': API_DIAGNOSTICS.get('last_response_time_ms', 0),
+            'status_code': API_DIAGNOSTICS.get('last_status_code', 0)
+        })
+    else:
+        console_log("❌ API test failed", "error")
+        return jsonify({
+            'success': False,
+            'error': API_DIAGNOSTICS.get('last_error', 'Unknown error')
+        })
+
+@app.route('/api/clear-console', methods=['POST'])
+@rate_limit
+@require_password
+def clear_console():
+    """Clear system console logs - requires password."""
+    global SYSTEM_CONSOLE
+    SYSTEM_CONSOLE = []
+    console_log("🗑️ Console cleared by admin", "info")
+    return jsonify({'success': True})
 
 @app.route('/api/toggle/<feature>', methods=['POST'])
 @rate_limit
@@ -906,6 +1106,18 @@ def start_background_checker():
 
 load_logs()
 load_recipient_status()
+
+# ===== STARTUP CONSOLE MESSAGES =====
+console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+console_log("🚀 DUBAI FLEA MARKET EVENT TRACKER STARTING...", "info")
+console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+console_log(f"📡 API Endpoint: {API_URL}", "debug")
+console_log(f"⏰ Check Interval: {CONFIG['check_interval_minutes']} minutes", "debug")
+console_log(f"💓 Heartbeat: Every {CONFIG['heartbeat_hours']} hours", "debug")
+console_log(f"👥 Recipients configured: {len(get_all_recipients())}", "debug")
+console_log("✅ System initialized successfully", "success")
+console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+
 start_background_checker()
 
 if __name__ == '__main__':

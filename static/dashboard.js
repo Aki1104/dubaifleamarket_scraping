@@ -6,6 +6,8 @@ var pendingAction = null;
 var pendingData = null;
 var pendingSuccessMessage = null;
 var pendingMaskedEmail = null;
+var autoScrollEnabled = true;
+var lastConsoleCount = 0;
 
 function formatTime(seconds, showHours = false) {
     if (seconds <= 0) return showHours ? '00:00:00' : '00:00';
@@ -244,4 +246,162 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Failed to update status');
         }
     }, 30000);
+    
+    // Initialize console and diagnostics polling
+    updateConsoleAndDiagnostics();
+    setInterval(updateConsoleAndDiagnostics, 5000);
+    
+    // Set auto-scroll button state
+    updateAutoScrollButton();
 });
+
+// ===== SYSTEM CONSOLE FUNCTIONS =====
+function toggleAutoScroll() {
+    autoScrollEnabled = !autoScrollEnabled;
+    updateAutoScrollButton();
+}
+
+function updateAutoScrollButton() {
+    const btn = document.getElementById('auto-scroll-btn');
+    if (btn) {
+        if (autoScrollEnabled) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    }
+}
+
+async function updateConsoleAndDiagnostics() {
+    try {
+        const response = await fetch('/api/console');
+        const data = await response.json();
+        
+        // Update terminal output
+        updateTerminal(data.console);
+        
+        // Update diagnostics
+        updateDiagnostics(data.diagnostics);
+        
+    } catch (e) {
+        console.log('Failed to update console/diagnostics');
+    }
+}
+
+function updateTerminal(consoleLogs) {
+    const terminal = document.getElementById('terminal-output');
+    if (!terminal || !consoleLogs) return;
+    
+    // Only update if there are new logs
+    if (consoleLogs.length === lastConsoleCount) return;
+    lastConsoleCount = consoleLogs.length;
+    
+    // Build terminal HTML (logs are already in reverse order from server)
+    const html = consoleLogs.slice(0, 50).reverse().map(log => {
+        const time = log.time ? log.time.split(' ')[1] || log.time : '--:--:--';
+        return `
+            <div class="terminal-line ${log.type}">
+                <span class="term-time">${time}</span>
+                <span class="term-type ${log.type}">${log.type}</span>
+                <span class="term-msg">${escapeHtml(log.msg)}</span>
+            </div>
+        `;
+    }).join('');
+    
+    terminal.innerHTML = html || '<div class="terminal-line welcome"><span class="term-time">--:--:--</span><span class="term-msg">Waiting for activity...</span></div>';
+    
+    // Auto-scroll to bottom
+    if (autoScrollEnabled) {
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+}
+
+function updateDiagnostics(diag) {
+    if (!diag) return;
+    
+    // Response time
+    const responseTime = document.getElementById('diag-response-time');
+    if (responseTime) {
+        const ms = diag.last_response_time_ms || 0;
+        responseTime.textContent = ms > 0 ? `${ms}ms` : '--';
+        responseTime.className = 'diag-value' + (ms > 2000 ? ' warning' : ms > 5000 ? ' error' : ' good');
+    }
+    
+    // Status code
+    const statusCode = document.getElementById('diag-status-code');
+    if (statusCode) {
+        const code = diag.last_status_code;
+        statusCode.textContent = code || '--';
+        statusCode.className = 'diag-value' + (code === 200 ? ' good' : code ? ' error' : '');
+    }
+    
+    // Response size
+    const responseSize = document.getElementById('diag-response-size');
+    if (responseSize) {
+        const bytes = diag.last_response_size || 0;
+        responseSize.textContent = bytes > 0 ? formatBytes(bytes) : '--';
+    }
+    
+    // Events count
+    const eventsCount = document.getElementById('diag-events-count');
+    if (eventsCount) {
+        eventsCount.textContent = diag.last_events_count !== undefined ? diag.last_events_count : '--';
+    }
+    
+    // Total calls
+    const totalCalls = document.getElementById('diag-total-calls');
+    if (totalCalls) {
+        totalCalls.textContent = diag.total_api_calls || 0;
+    }
+    
+    // Failed calls
+    const failedCalls = document.getElementById('diag-failed-calls');
+    if (failedCalls) {
+        const failed = diag.failed_api_calls || 0;
+        failedCalls.textContent = failed;
+        failedCalls.className = 'diag-value' + (failed > 0 ? ' error' : ' good');
+    }
+    
+    // Avg response time
+    const avgTime = document.getElementById('diag-avg-time');
+    if (avgTime) {
+        const avg = diag.avg_response_time_ms || 0;
+        avgTime.textContent = avg > 0 ? `${avg}ms` : '--';
+    }
+    
+    // Last error
+    const lastError = document.getElementById('diag-last-error');
+    if (lastError) {
+        lastError.textContent = diag.last_error || 'None';
+        lastError.className = 'diag-value error-text-sm' + (diag.last_error ? ' error' : '');
+    }
+    
+    // API status badge
+    const statusBadge = document.getElementById('api-status-badge');
+    if (statusBadge) {
+        if (diag.last_status_code === 200) {
+            statusBadge.textContent = 'Connected';
+            statusBadge.className = 'badge success';
+        } else if (diag.last_error) {
+            statusBadge.textContent = 'Error';
+            statusBadge.className = 'badge error';
+        } else {
+            statusBadge.textContent = 'Waiting...';
+            statusBadge.className = 'badge warning';
+        }
+    }
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
