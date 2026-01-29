@@ -87,6 +87,10 @@ jobs:
           # 📊 Daily summary settings (optional)
           DAILY_SUMMARY_ENABLED: ${{ secrets.DAILY_SUMMARY_ENABLED }}
           DAILY_SUMMARY_HOUR: ${{ secrets.DAILY_SUMMARY_HOUR }}
+          # 💓 Heartbeat settings - sends status email every 3 hours
+          HEARTBEAT_ENABLED: 'true'
+          HEARTBEAT_HOURS: '3'
+          HEARTBEAT_EMAIL: 'steevenparubrub@gmail.com'
         run: |
           python event_tracker.py
       

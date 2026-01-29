@@ -1,4 +1,6 @@
 {
   "last_daily_summary": null,
-  "total_checks": 0
+  "total_checks": 0,
+  "last_heartbeat": null,
+  "last_check_time": null
 }

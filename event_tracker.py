@@ -79,6 +79,11 @@ DAILY_SUMMARY_HOUR = int(os.environ.get('DAILY_SUMMARY_HOUR', '9'))  # Default 9
 # 🧪 Test mode - adds "sorry for test" message to emails
 TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
 
+# 💓 Heartbeat settings - sends status email every X hours to confirm bot is running
+HEARTBEAT_ENABLED = os.environ.get('HEARTBEAT_ENABLED', 'true').lower() == 'true'  # Enabled by default!
+HEARTBEAT_HOURS = int(os.environ.get('HEARTBEAT_HOURS', '3'))  # Every 3 hours by default
+HEARTBEAT_EMAIL = os.environ.get('HEARTBEAT_EMAIL', 'steevenparubrub@gmail.com')  # Separate heartbeat recipient
+
 
 # ===== HELPER FUNCTIONS =====
 def get_recipient_list():
@@ -90,11 +95,16 @@ def get_recipient_list():
 
 
 def load_status():
-    """Load tracker status (for daily summary timing)."""
+    """Load tracker status (for daily summary and heartbeat timing)."""
     if os.path.exists(STATUS_FILE):
         with open(STATUS_FILE, 'r') as f:
             return json.load(f)
-    return {'last_daily_summary': None, 'total_checks': 0}
+    return {
+        'last_daily_summary': None, 
+        'total_checks': 0,
+        'last_heartbeat': None,
+        'last_check_time': None
+    }
 
 
 def save_status(status):
@@ -133,6 +143,121 @@ def mark_daily_summary_sent():
     status = load_status()
     status['last_daily_summary'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     status['total_checks'] = status.get('total_checks', 0) + 1
+    save_status(status)
+
+
+def should_send_heartbeat():
+    """Check if it's time to send a heartbeat email (every X hours)."""
+    if not HEARTBEAT_ENABLED:
+        return False
+    
+    status = load_status()
+    last_heartbeat = status.get('last_heartbeat')
+    
+    if not last_heartbeat:
+        # First run - send heartbeat to confirm it's working
+        return True
+    
+    try:
+        last_time = datetime.fromisoformat(last_heartbeat.replace('Z', '+00:00'))
+        now = datetime.now(timezone.utc)
+        hours_since = (now - last_time).total_seconds() / 3600
+        
+        if hours_since >= HEARTBEAT_HOURS:
+            print(f"💓 Heartbeat due! Last sent {hours_since:.1f} hours ago")
+            return True
+    except (ValueError, AttributeError):
+        # Invalid date format - send heartbeat
+        return True
+    
+    return False
+
+
+def send_heartbeat_email(events_count, seen_count, new_events_found=0):
+    """Send heartbeat email to confirm bot is running."""
+    if not HEARTBEAT_EMAIL:
+        print("⚠️ No heartbeat email configured")
+        return False
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        
+        now = datetime.now(timezone.utc)
+        local_now = datetime.now()
+        status = load_status()
+        total_checks = status.get('total_checks', 0)
+        
+        # Calculate uptime info
+        last_heartbeat = status.get('last_heartbeat', 'First run!')
+        
+        msg['Subject'] = f"💓 Bot Running OK - Check #{total_checks + 1} | {now.strftime('%H:%M')} UTC"
+        msg['From'] = MY_EMAIL
+        msg['To'] = HEARTBEAT_EMAIL
+        
+        email_body = f"""
+{'=' * 60}
+💓 DUBAI FLEA MARKET BOT - HEARTBEAT STATUS
+{'=' * 60}
+
+✅ STATUS: Bot is RUNNING and monitoring for new events!
+
+📊 CURRENT STATS:
+   • Check Number: #{total_checks + 1}
+   • Current Time (UTC): {now.strftime('%Y-%m-%d %H:%M:%S')}
+   • Current Time (Local): {local_now.strftime('%Y-%m-%d %H:%M:%S')}
+   • Events on Website: {events_count}
+   • Events Already Seen: {seen_count}
+   • New Events This Check: {new_events_found}
+
+⏰ TIMING INFO:
+   • Last Heartbeat: {last_heartbeat}
+   • Heartbeat Interval: Every {HEARTBEAT_HOURS} hours
+   • Checking for events: Every 15 minutes
+
+🎯 WHAT THIS MEANS:
+   The bot is actively running on GitHub's servers 24/7.
+   You will receive an INSTANT email when a new event is posted!
+   
+   This heartbeat email confirms everything is working.
+
+🔗 Manual Check: https://dubai-fleamarket.com
+
+{'=' * 60}
+🤖 Automated Heartbeat from Dubai Flea Market Tracker
+   Next heartbeat in ~{HEARTBEAT_HOURS} hours
+{'=' * 60}
+"""
+        
+        text_part = MIMEText(email_body, 'plain')
+        msg.attach(text_part)
+        
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(MY_EMAIL, MY_PASSWORD)
+            server.sendmail(MY_EMAIL, HEARTBEAT_EMAIL, msg.as_string())
+        
+        print(f"💓 Heartbeat email sent to {HEARTBEAT_EMAIL}")
+        return True
+    
+    except Exception as e:
+        print(f"❌ Error sending heartbeat: {e}")
+        return False
+
+
+def mark_heartbeat_sent():
+    """Mark that heartbeat was sent."""
+    status = load_status()
+    status['last_heartbeat'] = datetime.now(timezone.utc).isoformat()
+    status['total_checks'] = status.get('total_checks', 0) + 1
+    status['last_check_time'] = datetime.now(timezone.utc).isoformat()
+    save_status(status)
+
+
+def update_check_count():
+    """Update the check count without marking heartbeat."""
+    status = load_status()
+    status['total_checks'] = status.get('total_checks', 0) + 1
+    status['last_check_time'] = datetime.now(timezone.utc).isoformat()
     save_status(status)
 
 
@@ -453,6 +578,10 @@ def main():
     if TEST_MODE:
         print("🧪 TEST MODE ENABLED - Emails will include test warning")
     
+    # Show heartbeat status
+    if HEARTBEAT_ENABLED:
+        print(f"💓 Heartbeat enabled - sending status to {HEARTBEAT_EMAIL} every {HEARTBEAT_HOURS} hours")
+    
     # 🔐 Security check: Verify credentials are configured
     if not MY_EMAIL or not MY_PASSWORD or not TO_EMAIL:
         print("❌ ERROR: Email credentials not configured!")
@@ -474,6 +603,8 @@ def main():
     events = fetch_events()
     if events is None:
         print("❌ Failed to fetch events")
+        # Still update check count even on failure
+        update_check_count()
         return
     
     print(f"📥 Fetched {len(events)} events from API")
@@ -493,6 +624,9 @@ def main():
             if event_info:  # Only add if validation passed
                 new_events.append(event_info)
                 seen_data = add_seen_event(seen_data, event_info)
+    
+    # Track how many new events found for heartbeat
+    new_events_count = len(new_events)
     
     # Notify if new events found
     if new_events:
@@ -516,6 +650,21 @@ def main():
         else:
             if DAILY_SUMMARY_ENABLED:
                 print(f"⏰ Daily summary scheduled for {DAILY_SUMMARY_HOUR}:00 UTC")
+    
+    # 💓 HEARTBEAT CHECK - Always check if we need to send heartbeat
+    if should_send_heartbeat():
+        print("💓 Sending heartbeat email...")
+        if send_heartbeat_email(len(events), len(seen_event_ids), new_events_count):
+            mark_heartbeat_sent()
+        else:
+            # Still update check count even if heartbeat fails
+            update_check_count()
+    else:
+        # Update check count for tracking
+        update_check_count()
+        status = load_status()
+        last_hb = status.get('last_heartbeat', 'Never')
+        print(f"💓 Heartbeat not due yet. Last: {last_hb}")
     
     print("=" * 60)
 
