@@ -1,14 +1,20 @@
 """
 =============================================================================
-🌐 DUBAI FLEA MARKET ADMIN DASHBOARD - app.py
+🌐 DUBAI FLEA MARKET ADMIN DASHBOARD - SECURE VERSION
 =============================================================================
-Flask web application for monitoring and controlling the event tracker.
-Deploy to Render.com with UptimeRobot pinging /health every 5 min.
+Features:
+- Password protection for all admin actions
+- Rate limiting for DDoS protection
+- Input sanitization for security
+- CSRF-like token validation
+- Security headers
 =============================================================================
 """
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session, abort
+from functools import wraps
 from datetime import datetime, timezone, timedelta
+from collections import defaultdict
 import json
 import os
 import threading
@@ -17,8 +23,123 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import html
+import hashlib
+import secrets
+import time
+import re
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+
+# ===== SECURITY: Rate Limiting =====
+rate_limit_data = defaultdict(list)
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window
+BLOCKED_IPS = set()
+BLOCK_DURATION = 300  # 5 minutes
+
+def get_client_ip():
+    """Get real client IP, handling proxies."""
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    return request.remote_addr or '127.0.0.1'
+
+def is_rate_limited():
+    """Check if client is rate limited."""
+    ip = get_client_ip()
+    now = time.time()
+    
+    # Check if IP is blocked
+    if ip in BLOCKED_IPS:
+        return True
+    
+    # Clean old requests
+    rate_limit_data[ip] = [t for t in rate_limit_data[ip] if now - t < RATE_LIMIT_WINDOW]
+    
+    # Check rate limit
+    if len(rate_limit_data[ip]) >= RATE_LIMIT_MAX_REQUESTS:
+        BLOCKED_IPS.add(ip)
+        # Auto-unblock after duration (in background)
+        threading.Timer(BLOCK_DURATION, lambda: BLOCKED_IPS.discard(ip)).start()
+        log_activity(f"⚠️ Rate limit exceeded - IP blocked: {ip[:10]}...", "warning")
+        return True
+    
+    rate_limit_data[ip].append(now)
+    return False
+
+def rate_limit(f):
+    """Rate limiting decorator."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if is_rate_limited():
+            return jsonify({'error': 'Too many requests. Please wait.'}), 429
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ===== SECURITY: Input Validation =====
+def sanitize_string(text, max_length=500):
+    """Sanitize and validate string input."""
+    if not isinstance(text, str):
+        return str(text)[:max_length] if text is not None else ''
+    # Remove any potential script tags or SQL-like patterns
+    text = html.escape(text)
+    text = re.sub(r'[<>"\';]|--|\bOR\b|\bAND\b|\bUNION\b|\bSELECT\b|\bDROP\b|\bINSERT\b|\bDELETE\b', '', text, flags=re.IGNORECASE)
+    return text.strip()[:max_length]
+
+def validate_email(email):
+    """Validate email format."""
+    if not email or not isinstance(email, str):
+        return False
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email)) and len(email) <= 254
+
+def validate_url(url):
+    """Validate URL is from expected domain."""
+    if not url or not isinstance(url, str):
+        return False
+    allowed_domains = ['dubai-fleamarket.com', 'www.dubai-fleamarket.com']
+    try:
+        if not url.startswith(('http://', 'https://')):
+            return False
+        domain = url.split('/')[2].lower()
+        return any(domain == allowed or domain.endswith('.' + allowed) for allowed in allowed_domains)
+    except:
+        return False
+
+# ===== SECURITY: Password Protection =====
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')  # Set in .env!
+
+def verify_password(password):
+    """Verify admin password."""
+    if not password:
+        return False
+    # Use constant-time comparison to prevent timing attacks
+    return secrets.compare_digest(password, ADMIN_PASSWORD)
+
+def require_password(f):
+    """Decorator to require password for actions."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        data = request.get_json() or {}
+        password = data.get('password', '')
+        
+        if not verify_password(password):
+            log_activity(f"🚫 Failed auth attempt from {get_client_ip()[:10]}...", "warning")
+            return jsonify({'error': 'Invalid password', 'auth_required': True}), 401
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ===== SECURITY: Headers Middleware =====
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
 
 # ===== CONFIGURATION =====
 API_URL = "https://dubai-fleamarket.com/wp-json/wp/v2/product?per_page=20"
@@ -63,7 +184,7 @@ def get_recipients():
     """Get list of email recipients."""
     if not TO_EMAIL:
         return []
-    return [e.strip() for e in TO_EMAIL.split(',') if e.strip()]
+    return [e.strip() for e in TO_EMAIL.split(',') if e.strip() and validate_email(e.strip())]
 
 
 def log_activity(message, level="info"):
@@ -71,7 +192,7 @@ def log_activity(message, level="info"):
     global ACTIVITY_LOGS
     entry = {
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'message': message,
+        'message': sanitize_string(message, 200),
         'level': level
     }
     ACTIVITY_LOGS.insert(0, entry)
@@ -139,27 +260,6 @@ def save_seen_events(seen_data):
         log_activity(f"Failed to save events: {e}", "error")
 
 
-def sanitize_string(text):
-    """Sanitize input string."""
-    if not isinstance(text, str):
-        return str(text) if text is not None else ''
-    return html.escape(text).strip()
-
-
-def validate_url(url):
-    """Validate URL is from expected domain."""
-    if not url or not isinstance(url, str):
-        return False
-    allowed_domains = ['dubai-fleamarket.com', 'www.dubai-fleamarket.com']
-    try:
-        if not url.startswith(('http://', 'https://')):
-            return False
-        domain = url.split('/')[2].lower()
-        return any(domain == allowed or domain.endswith('.' + allowed) for allowed in allowed_domains)
-    except:
-        return False
-
-
 def fetch_events():
     """Fetch events from API."""
     try:
@@ -183,9 +283,14 @@ def send_email(subject, body, to_email=None):
         log_activity("No recipient email configured", "error")
         return False
     
+    # Validate recipient email
+    if not validate_email(recipient):
+        log_activity(f"Invalid recipient email: {recipient[:20]}...", "error")
+        return False
+    
     try:
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
+        msg['Subject'] = sanitize_string(subject, 100)
         msg['From'] = MY_EMAIL
         msg['To'] = recipient
         
@@ -198,10 +303,10 @@ def send_email(subject, body, to_email=None):
             server.sendmail(MY_EMAIL, recipient, msg.as_string())
         
         CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
-        log_activity(f"Email sent to {recipient}", "success")
+        log_activity(f"📧 Email sent to {recipient[:15]}...", "success")
         return True
     except Exception as e:
-        log_activity(f"Failed to send email: {e}", "error")
+        log_activity(f"Failed to send email: {str(e)[:50]}", "error")
         return False
 
 
@@ -306,7 +411,7 @@ def send_daily_summary_email():
 
 def check_for_events():
     """Main event checking logic."""
-    log_activity("Starting event check...")
+    log_activity("🔍 Starting event check...")
     CONFIG['last_check'] = datetime.now(timezone.utc).isoformat()
     CONFIG['total_checks'] += 1
     
@@ -318,7 +423,7 @@ def check_for_events():
         log_activity("Failed to fetch events from API", "error")
         return
     
-    log_activity(f"Fetched {len(events)} events from API")
+    log_activity(f"📡 Fetched {len(events)} events from API")
     
     new_events = []
     for event in events:
@@ -333,8 +438,8 @@ def check_for_events():
             
             event_info = {
                 'id': event_id,
-                'title': sanitize_string(event.get('title', {}).get('rendered', 'Unknown')),
-                'date_posted': sanitize_string(event.get('date', 'Unknown')),
+                'title': sanitize_string(event.get('title', {}).get('rendered', 'Unknown'), 200),
+                'date_posted': sanitize_string(event.get('date', 'Unknown'), 50),
                 'link': link
             }
             new_events.append(event_info)
@@ -351,7 +456,7 @@ def check_for_events():
         send_new_event_email(new_events)
         save_seen_events(seen_data)
     else:
-        log_activity("✨ No new events")
+        log_activity("✨ No new events found")
     
     status = load_status()
     status['total_checks'] = CONFIG['total_checks']
@@ -391,7 +496,7 @@ def background_checker():
                 check_for_events()
                 
                 if should_send_heartbeat():
-                    log_activity("💓 Sending heartbeat...")
+                    log_activity("💓 Sending scheduled heartbeat...")
                     if send_heartbeat():
                         status = load_status()
                         status['last_heartbeat'] = datetime.now(timezone.utc).isoformat()
@@ -400,7 +505,7 @@ def background_checker():
                         log_activity("💓 Heartbeat sent!", "success")
                 
             except Exception as e:
-                log_activity(f"Error in checker: {e}", "error")
+                log_activity(f"Error in checker: {str(e)[:50]}", "error")
         
         stop_checker.wait(timeout=CONFIG['check_interval_minutes'] * 60)
     
@@ -409,66 +514,74 @@ def background_checker():
 
 # ===== ROUTES =====
 @app.route('/')
+@rate_limit
 def dashboard():
     """Main dashboard page."""
     status = load_status()
     seen_data = load_seen_events()
     now = datetime.now(timezone.utc)
     
-    next_check_in = "N/A"
+    # Calculate time remaining
+    next_check_seconds = 0
     if CONFIG['next_check']:
         try:
             next_dt = datetime.fromisoformat(CONFIG['next_check'].replace('Z', '+00:00'))
-            diff = (next_dt - now).total_seconds()
-            if diff > 0:
-                mins = int(diff // 60)
-                secs = int(diff % 60)
-                next_check_in = f"{mins}m {secs}s"
-            else:
-                next_check_in = "Soon..."
+            next_check_seconds = max(0, int((next_dt - now).total_seconds()))
         except:
             pass
     
-    next_heartbeat_in = "N/A"
+    next_heartbeat_seconds = 0
     if CONFIG['next_heartbeat']:
         try:
             next_dt = datetime.fromisoformat(CONFIG['next_heartbeat'].replace('Z', '+00:00'))
-            diff = (next_dt - now).total_seconds()
-            if diff > 0:
-                hours = int(diff // 3600)
-                mins = int((diff % 3600) // 60)
-                next_heartbeat_in = f"{hours}h {mins}m"
-            else:
-                next_heartbeat_in = "Soon..."
+            next_heartbeat_seconds = max(0, int((next_dt - now).total_seconds()))
         except:
             pass
+    
+    # Calculate uptime
+    uptime_str = "Just started"
+    try:
+        start = datetime.fromisoformat(CONFIG['uptime_start'].replace('Z', '+00:00'))
+        diff = now - start
+        days = diff.days
+        hours = diff.seconds // 3600
+        mins = (diff.seconds % 3600) // 60
+        if days > 0:
+            uptime_str = f"{days}d {hours}h {mins}m"
+        elif hours > 0:
+            uptime_str = f"{hours}h {mins}m"
+        else:
+            uptime_str = f"{mins}m"
+    except:
+        pass
     
     return render_template('dashboard.html',
         config=CONFIG,
         status=status,
         seen_count=len(seen_data.get('event_ids', [])),
         recent_events=seen_data.get('event_details', [])[-10:][::-1],
-        logs=ACTIVITY_LOGS[:30],
+        logs=ACTIVITY_LOGS[:50],
         recipients=get_recipients(),
-        next_check_in=next_check_in,
-        next_heartbeat_in=next_heartbeat_in,
+        next_check_seconds=next_check_seconds,
+        next_heartbeat_seconds=next_heartbeat_seconds,
+        uptime_str=uptime_str,
         current_time=now.strftime('%Y-%m-%d %H:%M:%S UTC')
     )
 
 
 @app.route('/health')
 def health():
-    """Health check endpoint for UptimeRobot."""
+    """Health check endpoint for UptimeRobot - no rate limit."""
     return jsonify({
         'status': 'healthy',
         'tracker_enabled': CONFIG['tracker_enabled'],
         'total_checks': CONFIG['total_checks'],
-        'last_check': CONFIG['last_check'],
         'uptime_start': CONFIG['uptime_start']
     })
 
 
 @app.route('/api/status')
+@rate_limit
 def api_status():
     """API endpoint for status data."""
     status = load_status()
@@ -483,38 +596,44 @@ def api_status():
 
 
 @app.route('/api/toggle/<feature>', methods=['POST'])
+@rate_limit
+@require_password
 def toggle_feature(feature):
-    """Toggle a feature on/off."""
+    """Toggle a feature on/off - requires password."""
     enabled = False
     if feature == 'tracker':
         CONFIG['tracker_enabled'] = not CONFIG['tracker_enabled']
         enabled = CONFIG['tracker_enabled']
-        log_activity(f"Tracker {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
+        log_activity(f"🔄 Tracker {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
     elif feature == 'heartbeat':
         CONFIG['heartbeat_enabled'] = not CONFIG['heartbeat_enabled']
         enabled = CONFIG['heartbeat_enabled']
-        log_activity(f"Heartbeat {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
+        log_activity(f"🔄 Heartbeat {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
     elif feature == 'daily_summary':
         CONFIG['daily_summary_enabled'] = not CONFIG['daily_summary_enabled']
         enabled = CONFIG['daily_summary_enabled']
-        log_activity(f"Daily summary {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
+        log_activity(f"🔄 Daily summary {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
     
     return jsonify({'success': True, 'enabled': enabled, 'config': CONFIG})
 
 
 @app.route('/api/check-now', methods=['POST'])
+@rate_limit
+@require_password
 def check_now():
-    """Trigger an immediate check."""
-    log_activity("Manual check triggered", "info")
+    """Trigger an immediate check - requires password."""
+    log_activity("⚡ Manual check triggered", "info")
     thread = threading.Thread(target=check_for_events)
     thread.start()
     return jsonify({'success': True, 'message': 'Check triggered'})
 
 
 @app.route('/api/send-heartbeat', methods=['POST'])
+@rate_limit
+@require_password
 def send_heartbeat_now():
-    """Send heartbeat immediately."""
-    log_activity("Manual heartbeat triggered", "info")
+    """Send heartbeat immediately - requires password."""
+    log_activity("💓 Manual heartbeat triggered", "info")
     
     if send_heartbeat():
         status = load_status()
@@ -526,9 +645,11 @@ def send_heartbeat_now():
 
 
 @app.route('/api/send-daily-summary', methods=['POST'])
+@rate_limit
+@require_password
 def send_daily_summary_now():
-    """Send daily summary immediately."""
-    log_activity("Manual daily summary triggered", "info")
+    """Send daily summary immediately - requires password."""
+    log_activity("📊 Manual daily summary triggered", "info")
     
     if send_daily_summary_email():
         return jsonify({'success': True, 'message': 'Daily summary sent!'})
@@ -537,15 +658,21 @@ def send_daily_summary_now():
 
 
 @app.route('/api/test-email', methods=['POST'])
+@rate_limit
+@require_password
 def test_email():
-    """Send test email to a specific recipient."""
-    data = request.get_json()
+    """Send test email to a specific recipient - requires password."""
+    data = request.get_json() or {}
     email = data.get('email', '')
     
-    if not email:
-        return jsonify({'success': False, 'message': 'No email provided'})
+    if not email or not validate_email(email):
+        return jsonify({'success': False, 'message': 'Invalid email provided'})
     
-    log_activity(f"Testing email to {email}", "info")
+    # Verify email is in allowed recipients list
+    if email not in get_recipients():
+        return jsonify({'success': False, 'message': 'Email not in recipient list'})
+    
+    log_activity(f"🧪 Testing email to {email[:15]}...", "info")
     
     now = datetime.now(timezone.utc)
     subject = f"🧪 Test Email - Dubai Flea Market Tracker"
@@ -556,12 +683,11 @@ def test_email():
 
 ✅ This is a test email from Dubai Flea Market Tracker!
 
-If you received this email, your email configuration is working correctly.
+If you received this, your email configuration is working.
 
 📊 SYSTEM INFO:
    • Sent at: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}
    • Recipient: {email}
-   • Sender: {MY_EMAIL}
 
 🎯 You will receive instant notifications when new events are posted!
 
@@ -577,17 +703,20 @@ If you received this email, your email configuration is working correctly.
 
 
 @app.route('/api/test-all-emails', methods=['POST'])
+@rate_limit
+@require_password
 def test_all_emails():
-    """Send test email to all recipients."""
+    """Send test email to all recipients - requires password."""
     recipients = get_recipients()
     if not recipients:
         return jsonify({'success': False, 'message': 'No recipients configured'})
     
-    log_activity(f"Testing all {len(recipients)} emails", "info")
+    log_activity(f"🧪 Testing all {len(recipients)} emails", "info")
     
     success_count = 0
+    now = datetime.now(timezone.utc)
+    
     for email in recipients:
-        now = datetime.now(timezone.utc)
         subject = f"🧪 Test Email - Dubai Flea Market Tracker"
         body = f"""
 {'=' * 60}
@@ -614,6 +743,7 @@ def test_all_emails():
 
 
 @app.route('/api/live-events')
+@rate_limit
 def live_events():
     """Fetch current live events from website."""
     events = fetch_events()
@@ -622,28 +752,33 @@ def live_events():
     
     event_list = []
     for event in events[:10]:
-        event_list.append({
-            'id': event.get('id'),
-            'title': sanitize_string(event.get('title', {}).get('rendered', 'Unknown')),
-            'date': sanitize_string(event.get('date', 'Unknown'))[:10],
-            'link': event.get('link', '')
-        })
+        link = event.get('link', '')
+        if validate_url(link):
+            event_list.append({
+                'id': event.get('id'),
+                'title': sanitize_string(event.get('title', {}).get('rendered', 'Unknown'), 100),
+                'date': sanitize_string(event.get('date', 'Unknown'), 20)[:10],
+                'link': link
+            })
     
     return jsonify({'success': True, 'events': event_list})
 
 
 @app.route('/api/logs')
+@rate_limit
 def get_logs():
     """Get activity logs."""
     return jsonify({'logs': ACTIVITY_LOGS})
 
 
 @app.route('/api/clear-logs', methods=['POST'])
+@rate_limit
+@require_password
 def clear_logs():
-    """Clear activity logs."""
+    """Clear activity logs - requires password."""
     global ACTIVITY_LOGS
     ACTIVITY_LOGS = []
-    log_activity("Logs cleared", "info")
+    log_activity("🗑️ Logs cleared", "info")
     return jsonify({'success': True})
 
 
