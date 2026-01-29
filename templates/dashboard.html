@@ -45,13 +45,11 @@
             line-height: 1.6;
         }
 
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: var(--bg-secondary); }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
 
-        /* Header */
         .header {
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border);
@@ -120,12 +118,6 @@
             border: 1px solid rgba(34, 197, 94, 0.3);
         }
 
-        .status-pill.offline {
-            background: var(--danger-bg);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
         .pulse {
             width: 8px;
             height: 8px;
@@ -144,36 +136,31 @@
             color: var(--text-secondary);
         }
 
-        /* Main */
         .main {
             max-width: 1600px;
             margin: 0 auto;
             padding: 2rem;
         }
 
-        /* Grid */
         .grid { display: grid; gap: 1.5rem; }
         .grid-2 { grid-template-columns: repeat(2, 1fr); }
         .grid-3 { grid-template-columns: repeat(3, 1fr); }
-        .grid-4 { grid-template-columns: repeat(4, 1fr); }
         .grid-6 { grid-template-columns: repeat(6, 1fr); }
 
         @media (max-width: 1400px) {
             .grid-6 { grid-template-columns: repeat(3, 1fr); }
-            .grid-4 { grid-template-columns: repeat(2, 1fr); }
         }
 
         @media (max-width: 900px) {
-            .grid-6, .grid-4, .grid-3 { grid-template-columns: repeat(2, 1fr); }
+            .grid-6, .grid-3 { grid-template-columns: repeat(2, 1fr); }
             .grid-2 { grid-template-columns: 1fr; }
         }
 
         @media (max-width: 600px) {
-            .grid-6, .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+            .grid-6, .grid-3, .grid-2 { grid-template-columns: 1fr; }
             .main { padding: 1rem; }
         }
 
-        /* Cards */
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -211,7 +198,6 @@
 
         .card-body { padding: 1.5rem; }
 
-        /* Stat Cards */
         .stat-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -256,7 +242,6 @@
             color: var(--text-secondary);
         }
 
-        /* Timer Cards */
         .timer-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -283,13 +268,6 @@
             background-clip: text;
         }
 
-        .timer-value.heartbeat {
-            background: var(--gradient-2);
-            -webkit-background-clip: text;
-            background-clip: text;
-        }
-
-        /* Buttons */
         .btn {
             display: inline-flex;
             align-items: center;
@@ -325,21 +303,6 @@
             color: white;
         }
 
-        .btn-success:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4);
-        }
-
-        .btn-warning {
-            background: var(--gradient-3);
-            color: white;
-        }
-
-        .btn-warning:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
-        }
-
         .btn-outline {
             background: transparent;
             border: 1px solid var(--border);
@@ -357,14 +320,6 @@
             font-size: 0.8rem;
         }
 
-        .btn-icon {
-            width: 40px;
-            height: 40px;
-            padding: 0;
-            border-radius: 10px;
-        }
-
-        /* Actions Grid */
         .actions-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -404,12 +359,6 @@
             color: var(--accent);
         }
 
-        .action-btn span {
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        /* Toggle Switch */
         .toggle-row {
             display: flex;
             align-items: center;
@@ -420,8 +369,6 @@
             margin-bottom: 0.75rem;
         }
 
-        .toggle-row:last-child { margin-bottom: 0; }
-
         .toggle-info {
             display: flex;
             align-items: center;
@@ -431,10 +378,6 @@
         .toggle-info i {
             font-size: 1.25rem;
             color: var(--accent);
-        }
-
-        .toggle-label {
-            font-weight: 500;
         }
 
         .toggle-switch {
@@ -478,7 +421,6 @@
             transform: translateX(24px);
         }
 
-        /* Recipients */
         .recipient-item {
             display: flex;
             align-items: center;
@@ -494,12 +436,15 @@
             background: var(--bg-card-hover);
         }
 
-        .recipient-item:last-child { margin-bottom: 0; }
+        .recipient-item.disabled {
+            opacity: 0.6;
+        }
 
         .recipient-info {
             display: flex;
             align-items: center;
             gap: 12px;
+            flex: 1;
         }
 
         .recipient-avatar {
@@ -519,7 +464,12 @@
             color: var(--text-primary);
         }
 
-        /* Logs */
+        .recipient-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
         .log-list {
             max-height: 400px;
             overflow-y: auto;
@@ -561,45 +511,66 @@
             margin-top: 2px;
         }
 
-        /* Events */
-        .event-item {
+        .email-history-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 1rem 1.25rem;
+            padding: 0.75rem 1rem;
             background: var(--bg-input);
-            border-radius: 12px;
-            margin-bottom: 0.75rem;
-            transition: all 0.2s ease;
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid transparent;
         }
 
-        .event-item:hover {
-            background: var(--bg-card-hover);
+        .email-history-item.success {
+            border-left-color: var(--success);
         }
 
-        .event-title {
-            font-size: 0.95rem;
+        .email-history-item.error {
+            border-left-color: var(--danger);
+        }
+
+        .email-hist-left {
+            flex: 1;
+        }
+
+        .email-hist-email {
+            font-size: 0.9rem;
             font-weight: 500;
-            color: var(--text-primary);
             margin-bottom: 4px;
         }
 
-        .event-date {
+        .email-hist-subject {
             font-size: 0.8rem;
             color: var(--text-secondary);
+            margin-bottom: 4px;
         }
 
-        .event-link {
-            color: var(--accent);
-            text-decoration: none;
-            font-size: 0.85rem;
+        .email-hist-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
 
-        .event-link:hover {
-            text-decoration: underline;
+        .email-hist-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        /* Modal */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.success { background: var(--success); }
+        .status-dot.error { background: var(--danger); }
+
+        .status-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
         .modal-overlay {
             display: none;
             position: fixed;
@@ -704,7 +675,6 @@
 
         .error-text.show { display: block; }
 
-        /* Section Headers */
         .section-header {
             margin-bottom: 1.5rem;
         }
@@ -720,7 +690,6 @@
             font-size: 0.9rem;
         }
 
-        /* Toast */
         .toast-container {
             position: fixed;
             top: 20px;
@@ -760,7 +729,6 @@
 
         .toast-message { font-size: 0.9rem; }
 
-        /* Loading */
         .spinner {
             width: 20px;
             height: 20px;
@@ -774,7 +742,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Empty State */
         .empty-state {
             text-align: center;
             padding: 3rem 2rem;
@@ -787,7 +754,6 @@
             opacity: 0.5;
         }
 
-        /* Security Badge */
         .security-badge {
             display: flex;
             align-items: center;
@@ -801,6 +767,37 @@
         }
 
         .section-gap { margin-top: 2rem; }
+
+        .recipient-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .recipient-status-badge.enabled {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .recipient-status-badge.disabled {
+            background: var(--danger-bg);
+            color: var(--danger);
+        }
+
+        .show-email-btn {
+            color: var(--accent);
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 0.9rem;
+        }
+
+        .show-email-btn:hover {
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -819,7 +816,7 @@
                     <i class="bi bi-shield-check"></i>
                     Secured
                 </div>
-                <div class="status-pill {% if config.tracker_enabled %}online{% else %}offline{% endif %}">
+                <div class="status-pill online">
                     <div class="pulse"></div>
                     <span>{% if config.tracker_enabled %}Online{% else %}Offline{% endif %}</span>
                 </div>
@@ -859,7 +856,7 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon pink"><i class="bi bi-people"></i></div>
-                    <div class="stat-value">{{ recipients|length }}</div>
+                    <div class="stat-value">{{ all_recipients|length }}</div>
                     <div class="stat-label">Recipients</div>
                 </div>
                 <div class="stat-card">
@@ -879,7 +876,7 @@
                 </div>
                 <div class="timer-card">
                     <div class="timer-label">Next Heartbeat</div>
-                    <div class="timer-value heartbeat" id="timer-heartbeat">--:--:--</div>
+                    <div class="timer-value" id="timer-heartbeat">--:--:--</div>
                 </div>
             </div>
         </section>
@@ -967,13 +964,24 @@
                         </button>
                     </div>
                     <div class="card-body">
-                        {% for email in recipients %}
-                        <div class="recipient-item">
+                        {% for email in all_recipients %}
+                        <div class="recipient-item {% if not recipient_status[email].enabled %}disabled{% endif %}">
                             <div class="recipient-info">
                                 <div class="recipient-avatar">{{ email[0]|upper }}</div>
-                                <span class="recipient-email">{{ email }}</span>
+                                <div>
+                                    <div class="recipient-email">{{ mask_email(email) }}</div>
+                                    <div class="recipient-status-badge {% if recipient_status[email].enabled %}enabled{% else %}disabled{% endif %}">
+                                        <i class="bi {% if recipient_status[email].enabled %}bi-check-circle{% else %}bi-x-circle{% endif %}"></i>
+                                        {% if recipient_status[email].enabled %}Enabled{% else %}Disabled{% endif %}
+                                    </div>
+                                </div>
                             </div>
-                            <button class="btn btn-sm btn-outline" onclick="testSingleEmail('{{ email }}')">Test</button>
+                            <div class="recipient-actions">
+                                <button class="btn btn-sm btn-outline" onclick="showFullEmail('{{ mask_email(email) }}')">Show</button>
+                                <button class="btn btn-sm btn-outline" onclick="toggleRecipient('{{ email }}')">
+                                    <i class="bi {% if recipient_status[email].enabled %}bi-pause{% else %}bi-play{% endif %}"></i>
+                                </button>
+                            </div>
                         </div>
                         {% else %}
                         <div class="empty-state">
@@ -986,9 +994,41 @@
             </div>
         </section>
 
-        <!-- Logs & Events -->
+        <!-- Email History & Activity Logs -->
         <section class="section-gap">
             <div class="grid grid-2">
+                <!-- Email History -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="bi bi-envelope-open"></i>
+                            Email History
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div style="max-height: 400px; overflow-y: auto;" id="email-history-list">
+                            {% for entry in email_history %}
+                            <div class="email-history-item {% if entry.success %}success{% else %}error{% endif %}">
+                                <div class="email-hist-left">
+                                    <div class="email-hist-email">{{ entry.recipient_masked }}</div>
+                                    <div class="email-hist-subject">{{ entry.subject[:40] }}</div>
+                                    <div class="email-hist-time">{{ entry.timestamp[:16] }}</div>
+                                </div>
+                                <div class="email-hist-status">
+                                    <div class="status-dot {% if entry.success %}success{% else %}error{% endif %}"></div>
+                                    <span class="status-label">{% if entry.success %}Sent{% else %}Failed{% endif %}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="empty-state">
+                                <i class="bi bi-archive"></i>
+                                <p>No email history yet</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Activity Logs -->
                 <div class="card">
                     <div class="card-header">
@@ -1007,7 +1047,7 @@
                                 <div class="log-dot {{ log.level }}"></div>
                                 <div class="log-content">
                                     <div class="log-message">{{ log.message }}</div>
-                                    <div class="log-time">{{ log.timestamp[:19] }}</div>
+                                    <div class="log-time">{{ log.timestamp[:16] }}</div>
                                 </div>
                             </div>
                             {% else %}
@@ -1017,59 +1057,6 @@
                             </div>
                             {% endfor %}
                         </div>
-                    </div>
-                </div>
-
-                <!-- Live Events -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="bi bi-broadcast"></i>
-                            Live Events
-                        </div>
-                        <button class="btn btn-sm btn-primary" onclick="loadLiveEvents()">
-                            <i class="bi bi-arrow-repeat"></i> Refresh
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div id="live-events">
-                            <div class="empty-state">
-                                <i class="bi bi-collection"></i>
-                                <p>Click refresh to load events</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Tracked Events -->
-        <section class="section-gap">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <i class="bi bi-bookmark-check"></i>
-                        Recently Tracked Events
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div style="max-height: 300px; overflow-y: auto;">
-                        {% for event in recent_events %}
-                        <div class="event-item">
-                            <div>
-                                <div class="event-title">{{ event.title }}</div>
-                                <div class="event-date">Tracked: {{ event.first_seen }}</div>
-                            </div>
-                            <a href="{{ event.link }}" target="_blank" class="event-link">
-                                View <i class="bi bi-box-arrow-up-right"></i>
-                            </a>
-                        </div>
-                        {% else %}
-                        <div class="empty-state">
-                            <i class="bi bi-calendar-x"></i>
-                            <p>No events tracked yet</p>
-                        </div>
-                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -1098,6 +1085,28 @@
         </div>
     </div>
 
+    <!-- Show Email Modal -->
+    <div class="modal-overlay" id="show-email-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-icon"><i class="bi bi-eye"></i></div>
+                <h3 class="modal-title">Full Email Address</h3>
+                <p class="modal-desc">Password required to view</p>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="show-email-password">Password</label>
+                    <input type="password" id="show-email-password" placeholder="Enter password" onkeypress="if(event.key === 'Enter') submitShowEmail()">
+                </div>
+                <div class="error-text" id="show-email-error">Invalid password. Please try again.</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeShowEmailModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitShowEmail()">Reveal Email</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
@@ -1108,8 +1117,8 @@
         let pendingAction = null;
         let pendingData = null;
         let pendingSuccessMessage = null;
+        let pendingMaskedEmail = null;
 
-        // Format seconds to time string
         function formatTime(seconds, showHours = false) {
             if (seconds <= 0) return showHours ? '00:00:00' : '00:00';
             
@@ -1123,7 +1132,6 @@
             return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
 
-        // Update timers
         function updateTimers() {
             if (nextCheckSeconds > 0) nextCheckSeconds--;
             if (nextHeartbeatSeconds > 0) nextHeartbeatSeconds--;
@@ -1135,7 +1143,6 @@
         setInterval(updateTimers, 1000);
         updateTimers();
 
-        // Toast notification
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -1151,7 +1158,6 @@
             setTimeout(() => toast.remove(), 4000);
         }
 
-        // Modal functions
         function openModal() {
             document.getElementById('password-modal').classList.add('show');
             document.getElementById('password-input').value = '';
@@ -1166,7 +1172,19 @@
             pendingSuccessMessage = null;
         }
 
-        // Secure action - requires password
+        function openShowEmailModal(masked) {
+            pendingMaskedEmail = masked;
+            document.getElementById('show-email-modal').classList.add('show');
+            document.getElementById('show-email-password').value = '';
+            document.getElementById('show-email-password').focus();
+            document.getElementById('show-email-error').classList.remove('show');
+        }
+
+        function closeShowEmailModal() {
+            document.getElementById('show-email-modal').classList.remove('show');
+            pendingMaskedEmail = null;
+        }
+
         function secureAction(endpoint, successMessage, data = {}) {
             pendingAction = endpoint;
             pendingData = data;
@@ -1174,7 +1192,6 @@
             openModal();
         }
 
-        // Submit password and execute action
         async function submitPassword() {
             const password = document.getElementById('password-input').value;
             
@@ -1209,7 +1226,6 @@
                 
                 if (result.success) {
                     showToast(result.message || pendingSuccessMessage, 'success');
-                    // Refresh data after 1 second
                     setTimeout(() => location.reload(), 1500);
                 } else {
                     showToast(result.message || 'Action failed', 'error');
@@ -1220,52 +1236,60 @@
             }
         }
 
-        // Toggle feature
         function toggleFeature(feature, checkbox) {
             pendingAction = `/api/toggle/${feature}`;
             pendingData = {};
             pendingSuccessMessage = `${feature} toggled!`;
             
-            // Revert checkbox until confirmed
             checkbox.checked = !checkbox.checked;
             openModal();
         }
 
-        // Test single email
-        function testSingleEmail(email) {
-            secureAction('/api/test-email', `Test email sent to ${email}`, { email });
+        function toggleRecipient(email) {
+            secureAction(`/api/toggle-recipient/${encodeURIComponent(email)}`, 'Recipient toggled!');
         }
 
-        // Load live events
-        async function loadLiveEvents() {
-            const container = document.getElementById('live-events');
-            container.innerHTML = '<div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>';
+        function showFullEmail(masked) {
+            openShowEmailModal(masked);
+        }
+
+        async function submitShowEmail() {
+            const password = document.getElementById('show-email-password').value;
+            
+            if (!password) {
+                document.getElementById('show-email-error').textContent = 'Please enter password';
+                document.getElementById('show-email-error').classList.add('show');
+                return;
+            }
             
             try {
-                const response = await fetch('/api/live-events');
-                const data = await response.json();
+                const response = await fetch('/api/reveal-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ masked: pendingMaskedEmail, password })
+                });
                 
-                if (data.success && data.events.length > 0) {
-                    container.innerHTML = data.events.map(e => `
-                        <div class="event-item">
-                            <div>
-                                <div class="event-title">${e.title}</div>
-                                <div class="event-date">${e.date}</div>
-                            </div>
-                            <a href="${e.link}" target="_blank" class="event-link">
-                                View <i class="bi bi-box-arrow-up-right"></i>
-                            </a>
-                        </div>
-                    `).join('');
+                const result = await response.json();
+                
+                if (response.status === 401) {
+                    document.getElementById('show-email-error').textContent = 'Invalid password. Please try again.';
+                    document.getElementById('show-email-error').classList.add('show');
+                    return;
+                }
+                
+                if (result.success) {
+                    alert('Email: ' + result.email);
+                    closeShowEmailModal();
                 } else {
-                    container.innerHTML = '<div class="empty-state"><i class="bi bi-calendar-x"></i><p>No events found</p></div>';
+                    document.getElementById('show-email-error').textContent = 'Failed to reveal email';
+                    document.getElementById('show-email-error').classList.add('show');
                 }
             } catch (error) {
-                container.innerHTML = '<div class="empty-state"><i class="bi bi-exclamation-triangle"></i><p>Failed to load</p></div>';
+                showToast('Network error', 'error');
+                closeShowEmailModal();
             }
         }
 
-        // Auto-refresh status every 30 seconds
         setInterval(async () => {
             try {
                 const response = await fetch('/api/status');

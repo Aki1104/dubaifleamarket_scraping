@@ -1,13 +1,14 @@
 """
 =============================================================================
-🌐 DUBAI FLEA MARKET ADMIN DASHBOARD - SECURE VERSION
+🌐 DUBAI FLEA MARKET ADMIN DASHBOARD - SECURE VERSION WITH EMAIL HISTORY
 =============================================================================
 Features:
 - Password protection for all admin actions
 - Rate limiting for DDoS protection
 - Input sanitization for security
-- CSRF-like token validation
-- Security headers
+- Email masking for privacy (show only first 2 & last 2 letters)
+- Email history tracking
+- Enable/Disable individual recipients
 =============================================================================
 """
 
@@ -33,10 +34,10 @@ app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
 # ===== SECURITY: Rate Limiting =====
 rate_limit_data = defaultdict(list)
-RATE_LIMIT_WINDOW = 60  # seconds
-RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window
+RATE_LIMIT_WINDOW = 60
+RATE_LIMIT_MAX_REQUESTS = 30
 BLOCKED_IPS = set()
-BLOCK_DURATION = 300  # 5 minutes
+BLOCK_DURATION = 300
 
 def get_client_ip():
     """Get real client IP, handling proxies."""
@@ -49,17 +50,13 @@ def is_rate_limited():
     ip = get_client_ip()
     now = time.time()
     
-    # Check if IP is blocked
     if ip in BLOCKED_IPS:
         return True
     
-    # Clean old requests
     rate_limit_data[ip] = [t for t in rate_limit_data[ip] if now - t < RATE_LIMIT_WINDOW]
     
-    # Check rate limit
     if len(rate_limit_data[ip]) >= RATE_LIMIT_MAX_REQUESTS:
         BLOCKED_IPS.add(ip)
-        # Auto-unblock after duration (in background)
         threading.Timer(BLOCK_DURATION, lambda: BLOCKED_IPS.discard(ip)).start()
         log_activity(f"⚠️ Rate limit exceeded - IP blocked: {ip[:10]}...", "warning")
         return True
@@ -81,7 +78,6 @@ def sanitize_string(text, max_length=500):
     """Sanitize and validate string input."""
     if not isinstance(text, str):
         return str(text)[:max_length] if text is not None else ''
-    # Remove any potential script tags or SQL-like patterns
     text = html.escape(text)
     text = re.sub(r'[<>"\';]|--|\bOR\b|\bAND\b|\bUNION\b|\bSELECT\b|\bDROP\b|\bINSERT\b|\bDELETE\b', '', text, flags=re.IGNORECASE)
     return text.strip()[:max_length]
@@ -106,14 +102,27 @@ def validate_url(url):
     except:
         return False
 
+def mask_email(email):
+    """Mask email - show only first 2 and last 2 letters."""
+    if not email or '@' not in email:
+        return '***'
+    
+    local, domain = email.split('@', 1)
+    
+    if len(local) <= 4:
+        masked_local = local[0] + '***'
+    else:
+        masked_local = local[:2] + '***' + local[-2:]
+    
+    return f"{masked_local}@{domain}"
+
 # ===== SECURITY: Password Protection =====
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')  # Set in .env!
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
 def verify_password(password):
     """Verify admin password."""
     if not password:
         return False
-    # Use constant-time comparison to prevent timing attacks
     return secrets.compare_digest(password, ADMIN_PASSWORD)
 
 def require_password(f):
@@ -148,6 +157,8 @@ DATA_DIR = os.environ.get('DATA_DIR', os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(DATA_DIR, "seen_events.json")
 STATUS_FILE = os.path.join(DATA_DIR, "tracker_status.json")
 LOGS_FILE = os.path.join(DATA_DIR, "activity_logs.json")
+RECIPIENT_STATUS_FILE = os.path.join(DATA_DIR, "recipient_status.json")
+EMAIL_HISTORY_FILE = os.path.join(DATA_DIR, "email_history.json")
 
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
@@ -178,14 +189,89 @@ MAX_LOGS = 100
 checker_thread = None
 stop_checker = threading.Event()
 
+# ===== RECIPIENT STATUS MANAGEMENT =====
+def load_recipient_status():
+    """Load recipient enabled/disabled status."""
+    if os.path.exists(RECIPIENT_STATUS_FILE):
+        try:
+            with open(RECIPIENT_STATUS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    
+    # Initialize all recipients as enabled
+    status = {}
+    for email in get_all_recipients():
+        status[email] = {'enabled': True}
+    
+    save_recipient_status(status)
+    return status
+
+def save_recipient_status(status):
+    """Save recipient status."""
+    try:
+        with open(RECIPIENT_STATUS_FILE, 'w') as f:
+            json.dump(status, f, indent=2)
+    except Exception as e:
+        log_activity(f"Failed to save recipient status: {e}", "error")
+
+def is_recipient_enabled(email):
+    """Check if recipient is enabled."""
+    status = load_recipient_status()
+    return status.get(email, {}).get('enabled', True)
+
+# ===== EMAIL HISTORY MANAGEMENT =====
+def load_email_history():
+    """Load email history."""
+    if os.path.exists(EMAIL_HISTORY_FILE):
+        try:
+            with open(EMAIL_HISTORY_FILE, 'r') as f:
+                history = json.load(f)
+                if isinstance(history, list):
+                    return history
+        except:
+            pass
+    return []
+
+def save_email_history(history):
+    """Save email history."""
+    try:
+        with open(EMAIL_HISTORY_FILE, 'w') as f:
+            json.dump(history, f, indent=2)
+    except Exception as e:
+        log_activity(f"Failed to save email history: {e}", "error")
+
+def add_to_email_history(recipient, subject, success, error_msg=''):
+    """Add entry to email history."""
+    history = load_email_history()
+    
+    # Keep last 500 entries
+    if len(history) > 500:
+        history = history[-500:]
+    
+    entry = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'recipient': recipient,
+        'recipient_masked': mask_email(recipient),
+        'subject': sanitize_string(subject, 100),
+        'success': success,
+        'error': error_msg if not success else ''
+    }
+    
+    history.append(entry)
+    save_email_history(history)
 
 # ===== HELPER FUNCTIONS =====
-def get_recipients():
-    """Get list of email recipients."""
+def get_all_recipients():
+    """Get all configured recipients."""
     if not TO_EMAIL:
         return []
     return [e.strip() for e in TO_EMAIL.split(',') if e.strip() and validate_email(e.strip())]
 
+def get_recipients():
+    """Get enabled recipients only."""
+    all_recipients = get_all_recipients()
+    return [e for e in all_recipients if is_recipient_enabled(e)]
 
 def log_activity(message, level="info"):
     """Add activity log entry."""
@@ -205,7 +291,6 @@ def log_activity(message, level="info"):
         pass
     print(f"[{level.upper()}] {message}")
 
-
 def load_logs():
     """Load activity logs from file."""
     global ACTIVITY_LOGS
@@ -215,7 +300,6 @@ def load_logs():
                 ACTIVITY_LOGS = json.load(f)
     except:
         ACTIVITY_LOGS = []
-
 
 def load_status():
     """Load tracker status."""
@@ -227,7 +311,6 @@ def load_status():
             pass
     return {'last_daily_summary': None, 'total_checks': 0, 'last_heartbeat': None, 'last_check_time': None}
 
-
 def save_status(status):
     """Save tracker status."""
     try:
@@ -235,7 +318,6 @@ def save_status(status):
             json.dump(status, f, indent=2)
     except Exception as e:
         log_activity(f"Failed to save status: {e}", "error")
-
 
 def load_seen_events():
     """Load seen events."""
@@ -250,7 +332,6 @@ def load_seen_events():
             pass
     return {'event_ids': [], 'event_details': []}
 
-
 def save_seen_events(seen_data):
     """Save seen events."""
     try:
@@ -258,7 +339,6 @@ def save_seen_events(seen_data):
             json.dump(seen_data, f, indent=2)
     except Exception as e:
         log_activity(f"Failed to save events: {e}", "error")
-
 
 def fetch_events():
     """Fetch events from API."""
@@ -270,12 +350,12 @@ def fetch_events():
         log_activity(f"Failed to fetch events: {e}", "error")
         return None
 
-
 def send_email(subject, body, to_email=None):
     """Send email notification."""
     global CONFIG
     if not MY_EMAIL or not MY_PASSWORD:
         log_activity("Email credentials not configured", "error")
+        add_to_email_history(to_email or 'unknown', subject, False, 'Credentials not configured')
         return False
     
     recipient = to_email or TO_EMAIL
@@ -283,9 +363,9 @@ def send_email(subject, body, to_email=None):
         log_activity("No recipient email configured", "error")
         return False
     
-    # Validate recipient email
     if not validate_email(recipient):
         log_activity(f"Invalid recipient email: {recipient[:20]}...", "error")
+        add_to_email_history(recipient, subject, False, 'Invalid email format')
         return False
     
     try:
@@ -304,14 +384,16 @@ def send_email(subject, body, to_email=None):
         
         CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
         log_activity(f"📧 Email sent to {recipient[:15]}...", "success")
+        add_to_email_history(recipient, subject, True)
         return True
     except Exception as e:
-        log_activity(f"Failed to send email: {str(e)[:50]}", "error")
+        error_msg = str(e)[:50]
+        log_activity(f"Failed to send email: {error_msg}", "error")
+        add_to_email_history(recipient, subject, False, error_msg)
         return False
 
-
 def send_new_event_email(events):
-    """Send new event notification to all recipients."""
+    """Send new event notification to enabled recipients."""
     subject = f"🎉 {len(events)} New Dubai Flea Market Event(s)!"
     body = f"🎯 {len(events)} new event(s) have been posted!\n\n"
     
@@ -325,7 +407,6 @@ def send_new_event_email(events):
     
     for email in get_recipients():
         send_email(subject, body, email)
-
 
 def send_heartbeat():
     """Send heartbeat status email."""
@@ -367,7 +448,6 @@ def send_heartbeat():
     
     return send_email(subject, body, CONFIG['heartbeat_email'])
 
-
 def send_daily_summary_email():
     """Send daily summary email."""
     now = datetime.now(timezone.utc)
@@ -407,7 +487,6 @@ def send_daily_summary_email():
             success = False
     
     return success
-
 
 def check_for_events():
     """Main event checking logic."""
@@ -465,7 +544,6 @@ def check_for_events():
     
     CONFIG['next_check'] = (datetime.now(timezone.utc) + timedelta(minutes=CONFIG['check_interval_minutes'])).isoformat()
 
-
 def should_send_heartbeat():
     """Check if heartbeat is due."""
     if not CONFIG['heartbeat_enabled']:
@@ -484,7 +562,6 @@ def should_send_heartbeat():
         return hours_since >= CONFIG['heartbeat_hours']
     except:
         return True
-
 
 def background_checker():
     """Background thread that runs the event checker."""
@@ -511,7 +588,6 @@ def background_checker():
     
     log_activity("Background checker stopped", "warning")
 
-
 # ===== ROUTES =====
 @app.route('/')
 @rate_limit
@@ -521,7 +597,6 @@ def dashboard():
     seen_data = load_seen_events()
     now = datetime.now(timezone.utc)
     
-    # Calculate time remaining
     next_check_seconds = 0
     if CONFIG['next_check']:
         try:
@@ -538,7 +613,6 @@ def dashboard():
         except:
             pass
     
-    # Calculate uptime
     uptime_str = "Just started"
     try:
         start = datetime.fromisoformat(CONFIG['uptime_start'].replace('Z', '+00:00'))
@@ -555,19 +629,25 @@ def dashboard():
     except:
         pass
     
+    # Get recipient status
+    all_recipients = get_all_recipients()
+    recipient_status = load_recipient_status()
+    
     return render_template('dashboard.html',
         config=CONFIG,
         status=status,
         seen_count=len(seen_data.get('event_ids', [])),
         recent_events=seen_data.get('event_details', [])[-10:][::-1],
         logs=ACTIVITY_LOGS[:50],
-        recipients=get_recipients(),
+        all_recipients=all_recipients,
+        recipient_status=recipient_status,
+        mask_email=mask_email,
         next_check_seconds=next_check_seconds,
         next_heartbeat_seconds=next_heartbeat_seconds,
         uptime_str=uptime_str,
-        current_time=now.strftime('%Y-%m-%d %H:%M:%S UTC')
+        current_time=now.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        email_history=load_email_history()[-20:][::-1]
     )
-
 
 @app.route('/health')
 def health():
@@ -578,7 +658,6 @@ def health():
         'total_checks': CONFIG['total_checks'],
         'uptime_start': CONFIG['uptime_start']
     })
-
 
 @app.route('/api/status')
 @rate_limit
@@ -593,7 +672,6 @@ def api_status():
         'seen_count': len(seen_data.get('event_ids', [])),
         'logs': ACTIVITY_LOGS[:20]
     })
-
 
 @app.route('/api/toggle/<feature>', methods=['POST'])
 @rate_limit
@@ -616,6 +694,29 @@ def toggle_feature(feature):
     
     return jsonify({'success': True, 'enabled': enabled, 'config': CONFIG})
 
+@app.route('/api/toggle-recipient/<email>', methods=['POST'])
+@rate_limit
+@require_password
+def toggle_recipient(email):
+    """Toggle recipient enabled/disabled status - requires password."""
+    if not validate_email(email):
+        return jsonify({'success': False, 'message': 'Invalid email'}), 400
+    
+    if email not in get_all_recipients():
+        return jsonify({'success': False, 'message': 'Email not in recipient list'}), 400
+    
+    status = load_recipient_status()
+    status[email]['enabled'] = not status[email]['enabled']
+    save_recipient_status(status)
+    
+    state = 'enabled' if status[email]['enabled'] else 'disabled'
+    log_activity(f"📧 Recipient {mask_email(email)} {state}", "success")
+    
+    return jsonify({
+        'success': True,
+        'message': f'Recipient {state}',
+        'enabled': status[email]['enabled']
+    })
 
 @app.route('/api/check-now', methods=['POST'])
 @rate_limit
@@ -626,7 +727,6 @@ def check_now():
     thread = threading.Thread(target=check_for_events)
     thread.start()
     return jsonify({'success': True, 'message': 'Check triggered'})
-
 
 @app.route('/api/send-heartbeat', methods=['POST'])
 @rate_limit
@@ -643,7 +743,6 @@ def send_heartbeat_now():
     
     return jsonify({'success': False, 'message': 'Failed to send heartbeat'})
 
-
 @app.route('/api/send-daily-summary', methods=['POST'])
 @rate_limit
 @require_password
@@ -656,7 +755,6 @@ def send_daily_summary_now():
     
     return jsonify({'success': False, 'message': 'Failed to send summary'})
 
-
 @app.route('/api/test-email', methods=['POST'])
 @rate_limit
 @require_password
@@ -668,11 +766,10 @@ def test_email():
     if not email or not validate_email(email):
         return jsonify({'success': False, 'message': 'Invalid email provided'})
     
-    # Verify email is in allowed recipients list
-    if email not in get_recipients():
+    if email not in get_all_recipients():
         return jsonify({'success': False, 'message': 'Email not in recipient list'})
     
-    log_activity(f"🧪 Testing email to {email[:15]}...", "info")
+    log_activity(f"🧪 Testing email to {mask_email(email)}", "info")
     
     now = datetime.now(timezone.utc)
     subject = f"🧪 Test Email - Dubai Flea Market Tracker"
@@ -687,7 +784,6 @@ If you received this, your email configuration is working.
 
 📊 SYSTEM INFO:
    • Sent at: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}
-   • Recipient: {email}
 
 🎯 You will receive instant notifications when new events are posted!
 
@@ -697,10 +793,9 @@ If you received this, your email configuration is working.
 """
     
     if send_email(subject, body, email):
-        return jsonify({'success': True, 'message': f'Test email sent to {email}'})
+        return jsonify({'success': True, 'message': f'Test email sent'})
     
     return jsonify({'success': False, 'message': 'Failed to send test email'})
-
 
 @app.route('/api/test-all-emails', methods=['POST'])
 @rate_limit
@@ -741,7 +836,6 @@ def test_all_emails():
         'message': f'Sent to {success_count}/{len(recipients)} recipients'
     })
 
-
 @app.route('/api/live-events')
 @rate_limit
 def live_events():
@@ -763,13 +857,33 @@ def live_events():
     
     return jsonify({'success': True, 'events': event_list})
 
+@app.route('/api/email-history')
+@rate_limit
+def get_email_history():
+    """Get email history."""
+    history = load_email_history()
+    return jsonify({'success': True, 'history': history[-50:][::-1]})
+
+@app.route('/api/reveal-email', methods=['POST'])
+@rate_limit
+@require_password
+def reveal_email():
+    """Reveal full email address - requires password."""
+    data = request.get_json() or {}
+    masked = data.get('masked', '')
+    
+    all_recipients = get_all_recipients()
+    for email in all_recipients:
+        if mask_email(email) == masked:
+            return jsonify({'success': True, 'email': email})
+    
+    return jsonify({'success': False, 'message': 'Email not found'})
 
 @app.route('/api/logs')
 @rate_limit
 def get_logs():
     """Get activity logs."""
     return jsonify({'logs': ACTIVITY_LOGS})
-
 
 @app.route('/api/clear-logs', methods=['POST'])
 @rate_limit
@@ -781,7 +895,6 @@ def clear_logs():
     log_activity("🗑️ Logs cleared", "info")
     return jsonify({'success': True})
 
-
 # ===== STARTUP =====
 def start_background_checker():
     """Start the background checker thread."""
@@ -791,10 +904,9 @@ def start_background_checker():
         checker_thread = threading.Thread(target=background_checker, daemon=True)
         checker_thread.start()
 
-
 load_logs()
+load_recipient_status()
 start_background_checker()
-
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
