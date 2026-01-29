@@ -1,0 +1,38 @@
+# =============================================================================
+# 🚀 RENDER DEPLOYMENT CONFIGURATION - render.yaml
+# =============================================================================
+# This file tells Render how to deploy your app
+# 
+# HOW TO USE:
+# 1. Push this file to your GitHub repo
+# 2. Go to render.com and connect your GitHub repo
+# 3. Render will auto-detect this file and configure everything
+# =============================================================================
+
+services:
+  - type: web
+    name: dubai-flea-market-tracker
+    runtime: python
+    region: oregon  # or singapore, frankfurt, ohio
+    plan: free
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2
+    envVars:
+      # Email Configuration (set these in Render dashboard -> Environment)
+      - key: MY_EMAIL
+        sync: false  # Set manually in dashboard
+      - key: MY_PASSWORD
+        sync: false  # Set manually in dashboard
+      - key: TO_EMAIL
+        sync: false  # Set manually in dashboard
+      # Heartbeat Configuration
+      - key: HEARTBEAT_ENABLED
+        value: "true"
+      - key: HEARTBEAT_HOURS
+        value: "3"
+      - key: HEARTBEAT_EMAIL
+        value: "steevenparubrub@gmail.com"
+      # Check Interval
+      - key: CHECK_INTERVAL
+        value: "15"
+    healthCheckPath: /health

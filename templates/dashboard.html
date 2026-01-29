@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dubai Flea Market Tracker - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --danger-gradient: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        .navbar {
+            background: rgba(255,255,255,0.1) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 16px;
+        }
+        
+        .card-header {
+            background: rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .stat-card {
+            background: var(--primary-gradient);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card.success { background: var(--success-gradient); }
+        .stat-card.danger { background: var(--danger-gradient); }
+        .stat-card.warning { background: var(--warning-gradient); }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        
+        .timer-display {
+            font-size: 1.8rem;
+            font-family: 'Courier New', monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            display: inline-block;
+        }
+        
+        .toggle-btn {
+            width: 60px;
+            height: 30px;
+            border-radius: 15px;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.3s ease;
+        }
+        
+        .toggle-btn.on { background: var(--success-gradient); }
+        .toggle-btn.off { background: #444; }
+        
+        .toggle-btn::after {
+            content: '';
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            transition: left 0.3s ease;
+        }
+        
+        .toggle-btn.on::after { left: 32px; }
+        .toggle-btn.off::after { left: 2px; }
+        
+        .log-entry {
+            padding: 0.5rem 1rem;
+            border-left: 3px solid #667eea;
+            margin-bottom: 0.5rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 0 8px 8px 0;
+            font-size: 0.85rem;
+        }
+        
+        .log-entry.success { border-color: #38ef7d; }
+        .log-entry.error { border-color: #f45c43; }
+        .log-entry.warning { border-color: #f5576c; }
+        
+        .event-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .btn-action {
+            background: var(--primary-gradient);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn-action:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-indicator.online { background: #38ef7d; animation: pulse 2s infinite; }
+        .status-indicator.offline { background: #f45c43; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="bi bi-shop"></i> Dubai Flea Market Tracker
+            </span>
+            <span class="text-muted">
+                <span class="status-indicator {{ 'online' if config.tracker_enabled else 'offline' }}"></span>
+                {{ 'Running' if config.tracker_enabled else 'Stopped' }}
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        <!-- Stats Row -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="bi bi-search fs-1 mb-2"></i>
+                    <div class="stat-number">{{ config.total_checks }}</div>
+                    <div>Total Checks</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card success">
+                    <i class="bi bi-calendar-event fs-1 mb-2"></i>
+                    <div class="stat-number">{{ seen_count }}</div>
+                    <div>Events Tracked</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card warning">
+                    <i class="bi bi-star-fill fs-1 mb-2"></i>
+                    <div class="stat-number">{{ config.total_new_events }}</div>
+                    <div>New Events Found</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card danger">
+                    <i class="bi bi-clock fs-1 mb-2"></i>
+                    <div class="stat-number" id="uptime">--</div>
+                    <div>Uptime</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timers Row -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-stopwatch"></i> Next Event Check
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="timer-display" id="next-check-timer">{{ next_check_in }}</div>
+                        <p class="text-muted mt-2 mb-0">Checking every {{ config.check_interval_minutes }} minutes</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-heart-pulse"></i> Next Heartbeat Email
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="timer-display" id="next-heartbeat-timer">{{ next_heartbeat_in }}</div>
+                        <p class="text-muted mt-2 mb-0">Sending to {{ config.heartbeat_email }} every {{ config.heartbeat_hours }}h</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Controls -->
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-gear"></i> Controls
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <span><i class="bi bi-robot"></i> Event Tracker</span>
+                            <button class="toggle-btn {{ 'on' if config.tracker_enabled else 'off' }}" 
+                                    id="toggle-tracker" onclick="toggleFeature('tracker')"></button>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <span><i class="bi bi-heart"></i> Heartbeat Emails</span>
+                            <button class="toggle-btn {{ 'on' if config.heartbeat_enabled else 'off' }}" 
+                                    id="toggle-heartbeat" onclick="toggleFeature('heartbeat')"></button>
+                        </div>
+                        
+                        <hr class="border-secondary">
+                        
+                        <div class="d-grid gap-2">
+                            <button class="btn-action" onclick="checkNow()">
+                                <i class="bi bi-lightning-charge"></i> Check Now
+                            </button>
+                            <button class="btn-action" onclick="sendHeartbeat()">
+                                <i class="bi bi-envelope-heart"></i> Send Heartbeat
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="clearLogs()">
+                                <i class="bi bi-trash"></i> Clear Logs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Logs -->
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between">
+                        <span><i class="bi bi-journal-text"></i> Activity Logs</span>
+                        <span class="badge bg-secondary">{{ logs|length }}</span>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        {% for log in logs %}
+                        <div class="log-entry {{ log.level }}">
+                            <small class="text-muted">{{ log.timestamp[:19] }}</small>
+                            <div>{{ log.message }}</div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center">No logs yet</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Events -->
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between">
+                        <span><i class="bi bi-calendar-check"></i> Recent Events</span>
+                        <span class="badge bg-success">{{ recent_events|length }}</span>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        {% for event in recent_events %}
+                        <div class="event-item">
+                            <div class="fw-bold">📍 {{ event.title[:40] }}{% if event.title|length > 40 %}...{% endif %}</div>
+                            <small class="text-muted">{{ event.first_seen }}</small>
+                            <div><a href="{{ event.link }}" target="_blank" class="text-info">View Event →</a></div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center">No events tracked yet</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center text-muted mt-4 pb-4">
+            <small>
+                <i class="bi bi-clock"></i> Server Time: {{ current_time }} |
+                <i class="bi bi-github"></i> Dubai Flea Market Event Tracker
+            </small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Calculate uptime
+        const uptimeStart = new Date('{{ config.uptime_start }}');
+        
+        function updateUptime() {
+            const now = new Date();
+            const diff = now - uptimeStart;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            document.getElementById('uptime').textContent = `${hours}h ${mins}m`;
+        }
+        
+        setInterval(updateUptime, 1000);
+        updateUptime();
+
+        // Toggle feature
+        async function toggleFeature(feature) {
+            const btn = document.getElementById(`toggle-${feature}`);
+            const response = await fetch(`/api/toggle/${feature}`, { method: 'POST' });
+            const data = await response.json();
+            
+            if (data.success) {
+                const isOn = feature === 'tracker' ? data.config.tracker_enabled : data.config.heartbeat_enabled;
+                btn.className = `toggle-btn ${isOn ? 'on' : 'off'}`;
+            }
+        }
+
+        // Check now
+        async function checkNow() {
+            const response = await fetch('/api/check-now', { method: 'POST' });
+            const data = await response.json();
+            if (data.success) {
+                alert('Check triggered! Refresh in a few seconds to see results.');
+            }
+        }
+
+        // Send heartbeat
+        async function sendHeartbeat() {
+            const response = await fetch('/api/send-heartbeat', { method: 'POST' });
+            const data = await response.json();
+            alert(data.message);
+        }
+
+        // Clear logs
+        async function clearLogs() {
+            if (confirm('Clear all activity logs?')) {
+                await fetch('/api/clear-logs', { method: 'POST' });
+                location.reload();
+            }
+        }
+
+        // Auto-refresh every 30 seconds
+        setTimeout(() => location.reload(), 30000);
+    </script>
+</body>
+</html>
