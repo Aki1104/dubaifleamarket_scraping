@@ -1407,6 +1407,191 @@ def clear_console():
     console_log("🗑️ Console cleared by admin", "info")
     return jsonify({'success': True})
 
+@app.route('/api/diagnose-smtp', methods=['POST'])
+@rate_limit
+@require_password
+def diagnose_smtp():
+    """Comprehensive Gmail SMTP diagnostic - tests each step of the connection."""
+    console_log("🔧 SMTP DIAGNOSTIC: Starting comprehensive test...", "warning")
+    
+    results = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'steps': [],
+        'overall_status': 'unknown',
+        'recommendations': []
+    }
+    
+    def add_step(name, status, details, duration_ms=None):
+        step = {'name': name, 'status': status, 'details': details}
+        if duration_ms is not None:
+            step['duration_ms'] = duration_ms
+        results['steps'].append(step)
+        console_log(f"  {'✅' if status == 'pass' else '❌'} {name}: {details}", "success" if status == 'pass' else "error")
+    
+    # Step 1: Check credentials are configured
+    console_log("🔧 Step 1: Checking credentials...", "info")
+    if not MY_EMAIL:
+        add_step("Credentials - Email", "fail", "MY_EMAIL environment variable not set")
+        results['recommendations'].append("Set MY_EMAIL environment variable in Render dashboard")
+    else:
+        add_step("Credentials - Email", "pass", f"Email configured: {mask_email(MY_EMAIL)}")
+    
+    if not MY_PASSWORD:
+        add_step("Credentials - Password", "fail", "MY_PASSWORD environment variable not set")
+        results['recommendations'].append("Set MY_PASSWORD environment variable (use App Password, not regular password)")
+    else:
+        add_step("Credentials - Password", "pass", f"Password configured ({len(MY_PASSWORD)} characters)")
+        # Check if it looks like an app password (16 chars, lowercase)
+        if len(MY_PASSWORD) == 16 and MY_PASSWORD.islower() and ' ' not in MY_PASSWORD:
+            add_step("Credentials - App Password Format", "pass", "Password looks like a valid App Password format")
+        elif len(MY_PASSWORD) < 16:
+            add_step("Credentials - App Password Format", "warning", f"Password is only {len(MY_PASSWORD)} chars - may not be an App Password")
+            results['recommendations'].append("Gmail requires App Password (16 chars). Go to: Google Account → Security → 2-Step Verification → App Passwords")
+    
+    if not MY_EMAIL or not MY_PASSWORD:
+        results['overall_status'] = 'fail'
+        results['recommendations'].append("Cannot proceed without credentials")
+        return jsonify(results)
+    
+    # Step 2: DNS resolution test
+    console_log("🔧 Step 2: Testing DNS resolution...", "info")
+    try:
+        import socket
+        start = time.time()
+        ip = socket.gethostbyname(SMTP_SERVER)
+        duration = int((time.time() - start) * 1000)
+        add_step("DNS Resolution", "pass", f"{SMTP_SERVER} → {ip}", duration)
+    except socket.gaierror as e:
+        add_step("DNS Resolution", "fail", f"Cannot resolve {SMTP_SERVER}: {str(e)}")
+        results['recommendations'].append("DNS resolution failed - check network/firewall settings")
+        results['overall_status'] = 'fail'
+        return jsonify(results)
+    
+    # Step 3: TCP connection test (port 587)
+    console_log("🔧 Step 3: Testing TCP connection to port 587...", "info")
+    try:
+        import socket
+        start = time.time()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10)
+        result = sock.connect_ex((SMTP_SERVER, SMTP_PORT))
+        sock.close()
+        duration = int((time.time() - start) * 1000)
+        
+        if result == 0:
+            add_step("TCP Connection", "pass", f"Port {SMTP_PORT} is reachable", duration)
+        else:
+            add_step("TCP Connection", "fail", f"Port {SMTP_PORT} connection failed (error code: {result})")
+            results['recommendations'].append("Port 587 blocked - Render or cloud provider may block outbound SMTP")
+            results['overall_status'] = 'fail'
+            return jsonify(results)
+    except Exception as e:
+        add_step("TCP Connection", "fail", f"Connection error: {str(e)[:100]}")
+        results['overall_status'] = 'fail'
+        return jsonify(results)
+    
+    # Step 4: SMTP handshake and STARTTLS
+    console_log("🔧 Step 4: Testing SMTP handshake...", "info")
+    try:
+        start = time.time()
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30)
+        duration = int((time.time() - start) * 1000)
+        add_step("SMTP Handshake", "pass", f"Connected to SMTP server", duration)
+        
+        # Get server banner
+        banner = server.ehlo_resp.decode() if server.ehlo_resp else "No banner"
+        add_step("SMTP Banner", "pass", f"Server responded: {banner[:100]}...")
+        
+    except smtplib.SMTPConnectError as e:
+        add_step("SMTP Handshake", "fail", f"SMTP connect error: {str(e)[:100]}")
+        results['overall_status'] = 'fail'
+        return jsonify(results)
+    except Exception as e:
+        add_step("SMTP Handshake", "fail", f"Error: {str(e)[:100]}")
+        results['overall_status'] = 'fail'
+        return jsonify(results)
+    
+    # Step 5: STARTTLS
+    console_log("🔧 Step 5: Testing STARTTLS encryption...", "info")
+    try:
+        start = time.time()
+        server.starttls()
+        duration = int((time.time() - start) * 1000)
+        add_step("STARTTLS", "pass", "TLS encryption established", duration)
+    except smtplib.SMTPException as e:
+        add_step("STARTTLS", "fail", f"TLS error: {str(e)[:100]}")
+        server.quit()
+        results['overall_status'] = 'fail'
+        return jsonify(results)
+    
+    # Step 6: Authentication
+    console_log("🔧 Step 6: Testing authentication...", "info")
+    try:
+        start = time.time()
+        server.login(MY_EMAIL, MY_PASSWORD)
+        duration = int((time.time() - start) * 1000)
+        add_step("Authentication", "pass", f"Logged in as {mask_email(MY_EMAIL)}", duration)
+    except smtplib.SMTPAuthenticationError as e:
+        error_msg = str(e)
+        add_step("Authentication", "fail", f"Auth failed: {error_msg[:150]}")
+        
+        if "BadCredentials" in error_msg or "535" in error_msg:
+            results['recommendations'].append("❌ WRONG PASSWORD: You must use an App Password, not your Google account password")
+            results['recommendations'].append("Steps: 1) Enable 2-Step Verification at myaccount.google.com/security")
+            results['recommendations'].append("Steps: 2) Go to myaccount.google.com/apppasswords")
+            results['recommendations'].append("Steps: 3) Create App Password for 'Mail' on 'Other (Custom name)'")
+            results['recommendations'].append("Steps: 4) Copy the 16-character password (no spaces) to MY_PASSWORD env var")
+        elif "TooManyLoginAttempts" in error_msg:
+            results['recommendations'].append("Too many login attempts - wait 24 hours or reset at accounts.google.com/DisplayUnlockCaptcha")
+        
+        server.quit()
+        results['overall_status'] = 'fail'
+        return jsonify(results)
+    except Exception as e:
+        add_step("Authentication", "fail", f"Error: {str(e)[:100]}")
+        server.quit()
+        results['overall_status'] = 'fail'
+        return jsonify(results)
+    
+    # Step 7: Send test email (optional - only if we passed everything)
+    console_log("🔧 Step 7: Testing email send...", "info")
+    test_recipient = TO_EMAIL or MY_EMAIL
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = "🔧 SMTP Diagnostic Test"
+        msg['From'] = MY_EMAIL
+        msg['To'] = test_recipient
+        msg.attach(MIMEText(f"SMTP diagnostic passed at {datetime.now(timezone.utc).isoformat()}", 'plain'))
+        
+        start = time.time()
+        server.sendmail(MY_EMAIL, test_recipient, msg.as_string())
+        duration = int((time.time() - start) * 1000)
+        add_step("Send Test Email", "pass", f"Email sent to {mask_email(test_recipient)}", duration)
+        results['overall_status'] = 'pass'
+        
+    except smtplib.SMTPRecipientsRefused as e:
+        add_step("Send Test Email", "fail", f"Recipient refused: {str(e)[:100]}")
+        results['overall_status'] = 'partial'
+    except smtplib.SMTPSenderRefused as e:
+        add_step("Send Test Email", "fail", f"Sender refused: {str(e)[:100]}")
+        results['recommendations'].append("Gmail may have flagged your account for suspicious activity")
+        results['overall_status'] = 'partial'
+    except Exception as e:
+        add_step("Send Test Email", "fail", f"Send error: {str(e)[:100]}")
+        results['overall_status'] = 'partial'
+    
+    try:
+        server.quit()
+    except:
+        pass
+    
+    # Summary
+    passed = len([s for s in results['steps'] if s['status'] == 'pass'])
+    total = len(results['steps'])
+    console_log(f"🔧 SMTP DIAGNOSTIC COMPLETE: {passed}/{total} steps passed", "success" if passed == total else "warning")
+    
+    return jsonify(results)
+
 @app.route('/api/toggle/<feature>', methods=['POST'])
 @rate_limit
 @require_password

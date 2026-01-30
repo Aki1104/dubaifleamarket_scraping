@@ -375,8 +375,9 @@
                         <div class="api-endpoint-info">
                             <div class="endpoint-label">API Endpoint</div>
                             <code class="endpoint-url">dubai-fleamarket.com/wp-json/wp/v2/product</code>
-                        </div>
-                    </div>
+                        </div>                        <button class="btn btn-sm btn-outline" onclick="runSmtpDiagnostic()" style="margin-top: 1rem; width: 100%;">
+                            <i class="bi bi-wrench"></i> Diagnose Gmail SMTP
+                        </button>                    </div>
                 </div>
             </div>
         </section>
@@ -846,6 +847,28 @@
                 <button class="btn btn-primary" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);" onclick="submitTestNewEvent()">
                     <i class="bi bi-lightning-charge"></i> Trigger Test
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SMTP Diagnostic Modal -->
+    <div class="modal-overlay" id="smtp-diagnostic-modal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-icon" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);"><i class="bi bi-wrench"></i></div>
+                <h3 class="modal-title">Gmail SMTP Diagnostic</h3>
+                <p class="modal-desc">Testing each step of the SMTP connection</p>
+            </div>
+            <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+                <div id="smtp-diagnostic-content">
+                    <div style="text-align: center; padding: 2rem;">
+                        <i class="bi bi-arrow-repeat spin" style="font-size: 2rem; color: var(--primary);"></i>
+                        <p style="margin-top: 1rem; color: var(--text-secondary);">Running diagnostic...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeSmtpDiagnosticModal()">Close</button>
             </div>
         </div>
     </div>

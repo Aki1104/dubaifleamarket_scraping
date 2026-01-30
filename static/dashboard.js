@@ -1125,3 +1125,118 @@ async function submitTestNewEvent() {
     }
 }
 
+// ===== SMTP DIAGNOSTIC =====
+function openSmtpDiagnosticModal() {
+    const modal = document.getElementById('smtp-diagnostic-modal');
+    if (modal) modal.classList.add('show');
+}
+
+function closeSmtpDiagnosticModal() {
+    const modal = document.getElementById('smtp-diagnostic-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+async function runSmtpDiagnostic() {
+    // First check if authenticated
+    const password = sessionStorage.getItem('auth_password');
+    if (!password) {
+        showToast('Please authenticate first (via Settings)', 'warning');
+        return;
+    }
+    
+    openSmtpDiagnosticModal();
+    const content = document.getElementById('smtp-diagnostic-content');
+    
+    // Show loading
+    content.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+            <i class="bi bi-arrow-repeat spin" style="font-size: 2rem; color: var(--primary);"></i>
+            <p style="margin-top: 1rem; color: var(--text-secondary);">Running diagnostic (this may take 30 seconds)...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch('/api/diagnose-smtp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        
+        if (response.status === 401) {
+            content.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: var(--error);">
+                    <i class="bi bi-x-circle" style="font-size: 2rem;"></i>
+                    <p style="margin-top: 1rem;">Invalid password</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const result = await response.json();
+        renderDiagnosticResults(content, result);
+        
+    } catch (e) {
+        console.error('[DEBUG] SMTP diagnostic error:', e);
+        content.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--error);">
+                <i class="bi bi-x-circle" style="font-size: 2rem;"></i>
+                <p style="margin-top: 1rem;">Network error: ${e.message}</p>
+            </div>
+        `;
+    }
+}
+
+function renderDiagnosticResults(container, result) {
+    const statusIcon = result.overall_status === 'pass' ? 'check-circle' : 
+                       result.overall_status === 'partial' ? 'exclamation-triangle' : 'x-circle';
+    const statusColor = result.overall_status === 'pass' ? 'var(--success)' : 
+                        result.overall_status === 'partial' ? 'var(--warning)' : 'var(--error)';
+    const statusText = result.overall_status === 'pass' ? 'All Tests Passed' : 
+                       result.overall_status === 'partial' ? 'Partial Success' : 'Failed';
+    
+    let html = `
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+            <i class="bi bi-${statusIcon}" style="font-size: 2.5rem; color: ${statusColor};"></i>
+            <h4 style="margin: 0.5rem 0; color: ${statusColor};">${statusText}</h4>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <h5 style="margin-bottom: 0.5rem; color: var(--text-primary);">Diagnostic Steps:</h5>
+    `;
+    
+    for (const step of result.steps) {
+        const icon = step.status === 'pass' ? 'check-circle' : 
+                     step.status === 'warning' ? 'exclamation-triangle' : 'x-circle';
+        const color = step.status === 'pass' ? 'var(--success)' : 
+                      step.status === 'warning' ? 'var(--warning)' : 'var(--error)';
+        const durationText = step.duration_ms ? ` (${step.duration_ms}ms)` : '';
+        
+        html += `
+            <div style="display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.5rem; background: var(--card-bg); border-radius: 6px; margin-bottom: 0.5rem;">
+                <i class="bi bi-${icon}" style="color: ${color}; flex-shrink: 0; margin-top: 2px;"></i>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 500; color: var(--text-primary);">${step.name}${durationText}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); word-break: break-word;">${step.details}</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    
+    // Recommendations
+    if (result.recommendations && result.recommendations.length > 0) {
+        html += `
+            <div style="margin-top: 1rem; padding: 1rem; background: var(--warning-bg); border: 1px solid var(--warning); border-radius: 8px;">
+                <h5 style="margin: 0 0 0.5rem 0; color: var(--warning);"><i class="bi bi-lightbulb"></i> Recommendations:</h5>
+                <ul style="margin: 0; padding-left: 1.25rem; color: var(--text-secondary); font-size: 0.85rem;">
+        `;
+        for (const rec of result.recommendations) {
+            html += `<li style="margin-bottom: 0.25rem;">${rec}</li>`;
+        }
+        html += '</ul></div>';
+    }
+    
+    container.innerHTML = html;
+}
+
