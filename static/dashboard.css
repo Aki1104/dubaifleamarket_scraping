@@ -712,11 +712,26 @@ body {
 .toast.success { border-left: 4px solid var(--success); }
 .toast.error { border-left: 4px solid var(--danger); }
 .toast.warning { border-left: 4px solid var(--warning); }
+.toast.loading { border-left: 4px solid var(--info); }
 
 .toast i { font-size: 1.25rem; }
 .toast.success i { color: var(--success); }
 .toast.error i { color: var(--danger); }
 .toast.warning i { color: var(--warning); }
+.toast.loading i { color: var(--info); }
+
+.toast i.spin {
+    animation: spin 1s linear infinite;
+}
+
+.toast.fade-out {
+    animation: toastOut 0.3s ease forwards;
+}
+
+@keyframes toastOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(100px); }
+}
 
 .toast-message { font-size: 0.9rem; }
 

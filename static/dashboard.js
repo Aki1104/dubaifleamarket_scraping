@@ -97,21 +97,40 @@ async function refreshTimersFromServer() {
         console.error('[DEBUG] refreshTimersFromServer error:', e);
     }
 }
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', persistent = false) {
     const container = document.getElementById('toast-container');
-    if (!container) return;
+    if (!container) return null;
     
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
-    const icons = { success: 'check-circle', error: 'x-circle', warning: 'exclamation-triangle' };
+    const icons = { 
+        success: 'check-circle', 
+        error: 'x-circle', 
+        warning: 'exclamation-triangle',
+        loading: 'arrow-repeat'
+    };
+    
+    const isLoading = type === 'loading';
     toast.innerHTML = `
-        <i class="bi bi-${icons[type]}"></i>
+        <i class="bi bi-${icons[type]}${isLoading ? ' spin' : ''}"></i>
         <span class="toast-message">${message}</span>
     `;
     
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    
+    if (!persistent) {
+        setTimeout(() => toast.remove(), 4000);
+    }
+    
+    return toast; // Return toast element for manual removal
+}
+
+function removeToast(toast) {
+    if (toast && toast.parentNode) {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 300);
+    }
 }
 
 function openModal() {
@@ -275,39 +294,44 @@ async function submitPassword() {
         return;
     }
     
+    // Store action details before closing modal
+    const actionEndpoint = pendingAction;
+    const actionData = { ...pendingData, password };
+    const successMsg = pendingSuccessMessage;
+    
+    // Close modal immediately and show loading toast
+    closeModal();
+    const loadingToast = showToast('Processing action...', 'loading', true);
+    
     try {
-        console.log('[DEBUG] Sending POST to:', pendingAction);
-        const response = await fetch(pendingAction, {
+        console.log('[DEBUG] Sending POST to:', actionEndpoint);
+        const response = await fetch(actionEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...pendingData, password })
+            body: JSON.stringify(actionData)
         });
         
         console.log('[DEBUG] Response status:', response.status);
         const result = await response.json();
         console.log('[DEBUG] Response data:', result);
         
+        // Remove loading toast
+        removeToast(loadingToast);
+        
         if (response.status === 401) {
             console.log('[DEBUG] Authentication failed - 401');
-            if (errorElement) {
-                errorElement.textContent = 'Invalid password. Please try again.';
-                errorElement.classList.add('show');
-            }
+            showToast('Invalid password. Please try again.', 'error');
             return;
         }
         
         if (response.status === 429) {
             console.log('[DEBUG] Rate limited - 429');
             showToast('Too many requests. Please wait.', 'warning');
-            closeModal();
             return;
         }
         
-        console.log('[DEBUG] Closing modal and showing result');
-        closeModal();
-        
         if (result.success) {
-            showToast(result.message || pendingSuccessMessage, 'success');
+            showToast(result.message || successMsg, 'success');
             console.log('[DEBUG] Success - reloading page in 1.5s');
             setTimeout(() => location.reload(), 1500);
         } else {
@@ -316,8 +340,8 @@ async function submitPassword() {
         }
     } catch (error) {
         console.error('[DEBUG] Network/fetch error:', error);
-        showToast('Network error', 'error');
-        closeModal();
+        removeToast(loadingToast);
+        showToast('Network error. Please try again.', 'error');
     }
 }
 
@@ -948,6 +972,10 @@ async function submitTestSingleEmail() {
     
     console.log('[DEBUG] Testing single email to:', email);
     
+    // Close modal immediately and show loading
+    closeTestSingleEmailModal();
+    const loadingToast = showToast('Sending test email...', 'loading', true);
+    
     try {
         const response = await fetch('/api/test-single-email', {
             method: 'POST',
@@ -956,22 +984,21 @@ async function submitTestSingleEmail() {
         });
         
         const result = await response.json();
+        removeToast(loadingToast);
         
         if (response.status === 401) {
-            error.textContent = 'Invalid password';
-            error.classList.add('show');
+            showToast('Invalid password', 'error');
             return;
         }
         
         if (result.success) {
             showToast(result.message, 'success');
-            closeTestSingleEmailModal();
         } else {
-            error.textContent = result.message || 'Failed to send';
-            error.classList.add('show');
+            showToast(result.message || 'Failed to send', 'error');
         }
     } catch (e) {
         console.error('[DEBUG] Test email error:', e);
+        removeToast(loadingToast);
         showToast('Network error', 'error');
     }
 }
@@ -1041,6 +1068,10 @@ async function submitTestNewEvent() {
     
     console.log('[DEBUG] Triggering test new event notification...');
     
+    // Close modal immediately and show loading
+    closeTestNewEventModal();
+    const loadingToast = showToast('Removing event & triggering check...', 'loading', true);
+    
     try {
         const response = await fetch('/api/test-new-event', {
             method: 'POST',
@@ -1049,26 +1080,25 @@ async function submitTestNewEvent() {
         });
         
         const result = await response.json();
+        removeToast(loadingToast);
         
         if (response.status === 401) {
-            error.textContent = 'Invalid password';
-            error.classList.add('show');
+            showToast('Invalid password', 'error');
             return;
         }
         
         if (result.success) {
             showToast(result.message, 'success');
-            closeTestNewEventModal();
             // Refresh page after a short delay to see the changes
             setTimeout(() => {
                 window.location.reload();
             }, 2000);
         } else {
-            error.textContent = result.message || 'Failed to trigger test';
-            error.classList.add('show');
+            showToast(result.message || 'Failed to trigger test', 'error');
         }
     } catch (e) {
         console.error('[DEBUG] Test new event error:', e);
+        removeToast(loadingToast);
         showToast('Network error', 'error');
     }
 }
