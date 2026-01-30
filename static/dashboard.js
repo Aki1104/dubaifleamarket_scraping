@@ -583,6 +583,17 @@ function updateDiagnostics(diag) {
         lastError.className = 'diag-value error-text-sm' + (diag.last_error ? ' error' : '');
     }
     
+    // Email provider (from diagnostics endpoint)
+    if (data.email_provider) {
+        const emailProvider = document.getElementById('diag-email-provider');
+        if (emailProvider) {
+            const primary = data.email_provider.primary || 'Unknown';
+            const fallback = data.email_provider.gmail_configured ? ' (Gmail backup)' : '';
+            emailProvider.textContent = primary + (primary === 'Resend' ? fallback : '');
+            emailProvider.className = 'diag-value ' + (primary === 'Resend' ? 'good' : 'warning');
+        }
+    }
+    
     // Email queue (from status endpoint)
     // This will be updated in refreshTimersFromServer
     
