@@ -1043,8 +1043,42 @@ def send_heartbeat():
         console_log("❌ Failed to send heartbeat email", "error")
     return result
 
+def send_telegram_daily_summary():
+    """Send daily summary via Telegram."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_IDS:
+        return False
+    
+    now = datetime.now(timezone.utc)
+    seen_data = load_seen_events()
+    events = fetch_events()
+    
+    event_count = len(events) if events else 0
+    seen_count = len(seen_data.get('event_ids', []))
+    
+    message = f"""📊 <b>Daily Summary</b>
+📅 {now.strftime('%A, %B %d, %Y')}
+
+📈 <b>Statistics:</b>
+• Events on website: {event_count}
+• Events tracked: {seen_count}
+• Checks performed: {CONFIG['total_checks']}
+• New events today: {CONFIG['total_new_events']}
+• Emails sent: {CONFIG['emails_sent']}
+
+✅ Tracker is running normally!
+
+🔗 <a href="https://dubai-fleamarket.com">Check manually</a>
+
+🤖 Dubai Flea Market Tracker"""
+    
+    success, error = send_telegram(message)
+    return success
+
 def send_daily_summary_email():
     """Send daily summary email."""
+    # Send via Telegram first (instant, free, reliable)
+    send_telegram_daily_summary()
+    
     console_log("📊 Generating daily summary...", "info")
     now = datetime.now(timezone.utc)
     seen_data = load_seen_events()
