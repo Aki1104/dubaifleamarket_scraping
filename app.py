@@ -195,6 +195,12 @@ EMAIL_HISTORY_FILE = os.path.join(DATA_DIR, "email_history.json")
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
 SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL', '')  # Must be verified sender
 
+# Telegram Bot (FREE - unlimited messages, instant push notifications)
+# Create bot: @BotFather on Telegram, get token
+# Get chat ID: Send message to bot, then visit: https://api.telegram.org/bot<TOKEN>/getUpdates
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')  # Comma-separated chat IDs
+
 # Gmail SMTP (FALLBACK - may be blocked on some cloud hosts)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
@@ -880,8 +886,99 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
     add_to_email_history(recipient, subject, False, f"Queued for retry: {error}")
     return False
 
+# ===== TELEGRAM BOT NOTIFICATIONS =====
+def send_telegram(message, chat_id=None):
+    """Send message via Telegram Bot. FREE and unlimited!"""
+    if not TELEGRAM_BOT_TOKEN:
+        console_log("⚠️ Telegram not configured (missing bot token)", "debug")
+        return False, "Telegram not configured"
+    
+    # Get chat IDs to send to
+    if chat_id:
+        chat_ids = [chat_id]
+    elif TELEGRAM_CHAT_IDS:
+        chat_ids = [cid.strip() for cid in TELEGRAM_CHAT_IDS.split(',') if cid.strip()]
+    else:
+        console_log("⚠️ No Telegram chat IDs configured", "debug")
+        return False, "No chat IDs configured"
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    success_count = 0
+    last_error = None
+    
+    for cid in chat_ids:
+        try:
+            response = requests.post(url, json={
+                'chat_id': cid,
+                'text': message,
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': False
+            }, timeout=10)
+            
+            if response.status_code == 200:
+                success_count += 1
+                console_log(f"✅ Telegram sent to chat {cid[:10]}...", "success")
+            else:
+                last_error = f"HTTP {response.status_code}: {response.text[:50]}"
+                console_log(f"⚠️ Telegram error for {cid[:10]}: {last_error}", "warning")
+        except Exception as e:
+            last_error = str(e)[:50]
+            console_log(f"⚠️ Telegram exception: {last_error}", "warning")
+    
+    if success_count > 0:
+        log_activity(f"📱 Telegram sent to {success_count} chat(s)", "success")
+        return True, None
+    return False, last_error
+
+def send_telegram_new_events(events):
+    """Send new event notification via Telegram."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_IDS:
+        return False
+    
+    message = f"🎉 <b>{len(events)} New Dubai Flea Market Event(s)!</b>\n\n"
+    
+    for event in events:
+        message += f"📍 <b>{event['title']}</b>\n"
+        message += f"🔗 {event['link']}\n"
+        message += f"📅 Posted: {event['date_posted']}\n"
+        message += "─" * 30 + "\n\n"
+    
+    message += "🤖 Dubai Flea Market Tracker"
+    
+    console_log(f"📱 Sending Telegram notification for {len(events)} event(s)", "info")
+    success, error = send_telegram(message)
+    return success
+
+def send_telegram_heartbeat():
+    """Send heartbeat via Telegram."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_IDS:
+        return False
+    
+    if not CONFIG['heartbeat_enabled']:
+        return False
+    
+    now = datetime.now(timezone.utc)
+    seen_data = load_seen_events()
+    
+    message = f"""💓 <b>Bot Running OK</b>
+
+✅ Status: RUNNING
+📊 Check #{CONFIG['total_checks']}
+⏰ {now.strftime('%H:%M UTC')}
+📦 Events tracked: {len(seen_data.get('event_ids', []))}
+📧 Emails sent: {CONFIG['emails_sent']}
+
+🤖 Dubai Flea Market Tracker"""
+    
+    success, error = send_telegram(message)
+    return success
+
 def send_new_event_email(events):
     """Send new event notification to enabled recipients. Uses HIGH priority for queue."""
+    # Send via Telegram first (instant, free, reliable)
+    send_telegram_new_events(events)
+    
+    # Also send via email
     subject = f"🎉 {len(events)} New Dubai Flea Market Event(s)!"
     body = f"🎯 {len(events)} new event(s) have been posted!\n\n"
     
@@ -901,6 +998,9 @@ def send_heartbeat():
     """Send heartbeat status email."""
     if not CONFIG['heartbeat_enabled']:
         return False
+    
+    # Send via Telegram first (instant, free, reliable)
+    send_telegram_heartbeat()
     
     console_log("💓 Sending heartbeat email...", "info")
     now = datetime.now(timezone.utc)
@@ -1388,7 +1488,9 @@ def api_diagnostics():
             'enabled_recipients': len(get_recipients())
         },
         'email_provider': {
-            'primary': 'SendGrid API' if (SENDGRID_AVAILABLE and SENDGRID_API_KEY and SENDGRID_FROM_EMAIL) else 'Gmail SMTP',
+            'primary': 'Telegram' if (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS) else ('SendGrid API' if (SENDGRID_AVAILABLE and SENDGRID_API_KEY and SENDGRID_FROM_EMAIL) else 'Gmail SMTP'),
+            'telegram_configured': bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS),
+            'telegram_chat_count': len([c for c in TELEGRAM_CHAT_IDS.split(',') if c.strip()]) if TELEGRAM_CHAT_IDS else 0,
             'sendgrid_available': SENDGRID_AVAILABLE,
             'sendgrid_configured': bool(SENDGRID_API_KEY and SENDGRID_FROM_EMAIL),
             'sendgrid_from_email': SENDGRID_FROM_EMAIL if SENDGRID_FROM_EMAIL else None,
