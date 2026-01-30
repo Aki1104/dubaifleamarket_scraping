@@ -93,6 +93,14 @@ async function refreshTimersFromServer() {
             if (checksElement) checksElement.textContent = data.config.total_checks;
             if (sentElement) sentElement.textContent = data.config.emails_sent;
         }
+        
+        // Update email queue count
+        const emailQueue = document.getElementById('diag-email-queue');
+        if (emailQueue) {
+            const queueCount = data.email_queue_count || 0;
+            emailQueue.textContent = queueCount;
+            emailQueue.className = 'diag-value' + (queueCount > 0 ? ' warning' : ' good');
+        }
     } catch (e) {
         console.error('[DEBUG] refreshTimersFromServer error:', e);
     }
@@ -574,6 +582,9 @@ function updateDiagnostics(diag) {
         lastError.textContent = diag.last_error || 'None';
         lastError.className = 'diag-value error-text-sm' + (diag.last_error ? ' error' : '');
     }
+    
+    // Email queue (from status endpoint)
+    // This will be updated in refreshTimersFromServer
     
     // API status badge
     const statusBadge = document.getElementById('api-status-badge');

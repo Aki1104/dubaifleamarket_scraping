@@ -216,6 +216,119 @@ MAX_CHECK_HISTORY = 50  # Keep last 50 check results
 SYSTEM_CONSOLE = []
 MAX_CONSOLE_LOGS = 200
 
+# ===== EMAIL QUEUE - Persistent retry for failed emails =====
+EMAIL_QUEUE_FILE = os.path.join(DATA_DIR, "email_queue.json")
+EMAIL_QUEUE = []  # List of {subject, body, recipient, created_at, attempts, next_retry, priority}
+MAX_EMAIL_QUEUE = 50
+EMAIL_RETRY_INTERVALS = [30, 60, 120, 240]  # Minutes: 30min, 1hr, 2hr, 4hr
+MAX_EMAIL_AGE_HOURS = 24  # Give up after 24 hours
+
+def load_email_queue():
+    """Load email queue from file."""
+    global EMAIL_QUEUE
+    if os.path.exists(EMAIL_QUEUE_FILE):
+        try:
+            with open(EMAIL_QUEUE_FILE, 'r') as f:
+                EMAIL_QUEUE = json.load(f)
+                console_log(f"📬 Email queue loaded: {len(EMAIL_QUEUE)} pending emails", "debug")
+        except Exception as e:
+            console_log(f"⚠️ Failed to load email queue: {e}", "warning")
+            EMAIL_QUEUE = []
+
+def save_email_queue():
+    """Save email queue to file."""
+    try:
+        with open(EMAIL_QUEUE_FILE, 'w') as f:
+            json.dump(EMAIL_QUEUE, f, indent=2)
+    except Exception as e:
+        console_log(f"⚠️ Failed to save email queue: {e}", "warning")
+
+def add_to_email_queue(subject, body, recipient, priority='normal'):
+    """Add a failed email to the retry queue."""
+    global EMAIL_QUEUE
+    
+    now = datetime.now(timezone.utc)
+    next_retry = now + timedelta(minutes=EMAIL_RETRY_INTERVALS[0])
+    
+    queue_item = {
+        'subject': subject,
+        'body': body,
+        'recipient': recipient,
+        'created_at': now.isoformat(),
+        'attempts': 0,
+        'next_retry': next_retry.isoformat(),
+        'priority': priority,  # 'high' for new events, 'normal' for heartbeat/test
+        'last_error': None
+    }
+    
+    EMAIL_QUEUE.append(queue_item)
+    
+    # Limit queue size
+    if len(EMAIL_QUEUE) > MAX_EMAIL_QUEUE:
+        # Remove oldest low-priority items first
+        EMAIL_QUEUE.sort(key=lambda x: (x['priority'] != 'high', x['created_at']))
+        EMAIL_QUEUE = EMAIL_QUEUE[:MAX_EMAIL_QUEUE]
+    
+    save_email_queue()
+    console_log(f"📬 Email queued for retry: {mask_email(recipient)} ({priority} priority)", "info")
+    log_activity(f"📬 Email queued for retry to {mask_email(recipient)}", "warning")
+
+def process_email_queue():
+    """Process pending emails in the queue. Called periodically."""
+    global EMAIL_QUEUE
+    
+    if not EMAIL_QUEUE:
+        return
+    
+    now = datetime.now(timezone.utc)
+    processed = 0
+    removed = 0
+    
+    console_log(f"📬 Processing email queue: {len(EMAIL_QUEUE)} pending", "info")
+    
+    for item in EMAIL_QUEUE[:]:  # Iterate over copy
+        created = datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
+        age_hours = (now - created).total_seconds() / 3600
+        
+        # Remove if too old
+        if age_hours > MAX_EMAIL_AGE_HOURS:
+            console_log(f"⏰ Email expired (>{MAX_EMAIL_AGE_HOURS}h old): {mask_email(item['recipient'])}", "warning")
+            log_activity(f"📧 Email expired after {MAX_EMAIL_AGE_HOURS}h: {item['subject'][:30]}...", "error")
+            EMAIL_QUEUE.remove(item)
+            removed += 1
+            continue
+        
+        # Check if it's time to retry
+        next_retry = datetime.fromisoformat(item['next_retry'].replace('Z', '+00:00'))
+        if now < next_retry:
+            continue
+        
+        # Try to send
+        console_log(f"🔄 Retrying queued email to {mask_email(item['recipient'])} (attempt {item['attempts'] + 1})", "info")
+        
+        success = send_email_direct(item['subject'], item['body'], item['recipient'])
+        
+        if success:
+            console_log(f"✅ Queued email delivered: {mask_email(item['recipient'])}", "success")
+            log_activity(f"✅ Queued email finally delivered to {mask_email(item['recipient'])}", "success")
+            EMAIL_QUEUE.remove(item)
+            processed += 1
+        else:
+            item['attempts'] += 1
+            
+            # Calculate next retry
+            if item['attempts'] < len(EMAIL_RETRY_INTERVALS):
+                delay_minutes = EMAIL_RETRY_INTERVALS[item['attempts']]
+            else:
+                delay_minutes = EMAIL_RETRY_INTERVALS[-1]  # Use last interval
+            
+            item['next_retry'] = (now + timedelta(minutes=delay_minutes)).isoformat()
+            console_log(f"⏳ Will retry in {delay_minutes} minutes", "debug")
+    
+    if processed or removed:
+        save_email_queue()
+        console_log(f"📬 Queue processed: {processed} sent, {removed} expired, {len(EMAIL_QUEUE)} remaining", "info")
+
 # ===== EVENT STATISTICS - For charting =====
 EVENT_STATS_FILE = os.path.join(DATA_DIR, "event_stats.json")
 EVENT_STATS = {
@@ -560,8 +673,40 @@ def fetch_events():
         log_activity(f"Failed to fetch events: {e}", "error")
         return None
 
-def send_email(subject, body, to_email=None, max_retries=3):
-    """Send email notification with retry logic for transient failures."""
+def send_email_direct(subject, body, recipient):
+    """Direct email send without queueing. Used by queue processor."""
+    global CONFIG
+    
+    if not MY_EMAIL or not MY_PASSWORD:
+        return False
+    
+    if not recipient or not validate_email(recipient):
+        return False
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = sanitize_string(subject, 100)
+        msg['From'] = MY_EMAIL
+        msg['To'] = recipient
+        text_part = MIMEText(body, 'plain')
+        msg.attach(text_part)
+        
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+            server.starttls()
+            server.login(MY_EMAIL, MY_PASSWORD)
+            server.sendmail(MY_EMAIL, recipient, msg.as_string())
+        
+        CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
+        record_stat('emails_sent', 1)
+        add_to_email_history(recipient, subject, True)
+        return True
+        
+    except Exception as e:
+        console_log(f"⚠️ Direct send failed: {str(e)[:50]}", "debug")
+        return False
+
+def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
+    """Send email notification with retry logic. Queues for deferred retry on failure."""
     global CONFIG
     if not MY_EMAIL or not MY_PASSWORD:
         log_activity("Email credentials not configured", "error")
@@ -605,7 +750,7 @@ def send_email(subject, body, to_email=None, max_retries=3):
             return True
             
         except (OSError, socket.error) as e:
-            # Network errors - retry
+            # Network errors - retry immediately, then queue for later
             last_error = str(e)[:50]
             console_log(f"⚠️ Network error (attempt {attempt}): {last_error}", "warning")
             if attempt < max_retries:
@@ -619,19 +764,19 @@ def send_email(subject, body, to_email=None, max_retries=3):
                 time.sleep(3)
                 continue
         except Exception as e:
-            # Other errors - don't retry
+            # Other errors - don't retry immediately
             last_error = str(e)[:50]
             console_log(f"❌ Email error: {last_error}", "error")
             break
     
-    # All retries failed
-    log_activity(f"Failed to send email after {max_retries} attempts: {last_error}", "error")
-    console_log(f"❌ Email delivery failed after {max_retries} retries: {last_error}", "error")
-    add_to_email_history(recipient, subject, False, f"Failed after {max_retries} retries: {last_error}")
-    return False
+    # All immediate retries failed - queue for deferred retry
+    console_log(f"📬 Queueing email for deferred retry: {mask_email(recipient)}", "info")
+    add_to_email_queue(subject, body, recipient, priority)
+    add_to_email_history(recipient, subject, False, f"Queued for retry: {last_error}")
+    return False  # Immediate send failed, but queued for later
 
 def send_new_event_email(events):
-    """Send new event notification to enabled recipients."""
+    """Send new event notification to enabled recipients. Uses HIGH priority for queue."""
     subject = f"🎉 {len(events)} New Dubai Flea Market Event(s)!"
     body = f"🎯 {len(events)} new event(s) have been posted!\n\n"
     
@@ -645,7 +790,7 @@ def send_new_event_email(events):
     
     console_log(f"📧 Sending new event notification to {len(get_recipients())} recipient(s)", "info")
     for email in get_recipients():
-        send_email(subject, body, email)
+        send_email(subject, body, email, priority='high')  # High priority for new events
 
 def send_heartbeat():
     """Send heartbeat status email."""
@@ -866,9 +1011,14 @@ def background_checker():
     log_activity("🚀 Background checker started", "success")
     console_log("🚀 Background checker thread initialized", "success")
     
+    # Load email queue on startup
+    load_email_queue()
+    
     consecutive_errors = 0
     max_consecutive_errors = 5
     check_interval_seconds = CONFIG['check_interval_minutes'] * 60
+    last_queue_check = datetime.now(timezone.utc)
+    queue_check_interval = timedelta(minutes=15)  # Process queue every 15 minutes
     
     while not stop_checker.is_set():
         if CONFIG['tracker_enabled']:
@@ -886,6 +1036,14 @@ def background_checker():
                         CONFIG['next_heartbeat'] = (datetime.now(timezone.utc) + timedelta(hours=CONFIG['heartbeat_hours'])).isoformat()
                         log_activity("💓 Heartbeat sent!", "success")
                         console_log("✅ Heartbeat email sent successfully", "success")
+                
+                # Process email queue periodically
+                now = datetime.now(timezone.utc)
+                if now - last_queue_check >= queue_check_interval:
+                    if EMAIL_QUEUE:
+                        console_log("📬 Checking email retry queue...", "debug")
+                        process_email_queue()
+                    last_queue_check = now
                 
             except Exception as e:
                 consecutive_errors += 1
@@ -1080,7 +1238,8 @@ def api_status():
         'seen_count': len(seen_data.get('event_ids', [])),
         'logs': ACTIVITY_LOGS[:20],
         'next_check_seconds': next_check_seconds,
-        'next_heartbeat_seconds': next_heartbeat_seconds
+        'next_heartbeat_seconds': next_heartbeat_seconds,
+        'email_queue_count': len(EMAIL_QUEUE)
     })
 
 @app.route('/api/console')
@@ -1122,6 +1281,11 @@ def api_diagnostics():
             'total_events_tracked': len(seen_data.get('event_ids', [])),
             'recipients_count': len(get_all_recipients()),
             'enabled_recipients': len(get_recipients())
+        },
+        'email_queue': {
+            'pending_count': len(EMAIL_QUEUE),
+            'high_priority': len([e for e in EMAIL_QUEUE if e.get('priority') == 'high']),
+            'items': EMAIL_QUEUE[:10]  # Show first 10 for debugging
         },
         'console_entries': len(SYSTEM_CONSOLE),
         'activity_log_entries': len(ACTIVITY_LOGS)
