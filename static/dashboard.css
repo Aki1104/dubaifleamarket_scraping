@@ -350,6 +350,31 @@ body {
     color: var(--accent);
 }
 
+/* Telegram button styles */
+.telegram-btn i {
+    color: #0088cc;
+}
+
+.telegram-btn:hover {
+    border-color: #0088cc;
+}
+
+/* Status indicator styles */
+.status-good {
+    color: var(--success);
+    font-weight: 500;
+}
+
+.status-warn {
+    color: var(--warning);
+    font-weight: 500;
+}
+
+.status-error {
+    color: var(--error);
+    font-weight: 500;
+}
+
 .toggle-row {
     display: flex;
     align-items: center;

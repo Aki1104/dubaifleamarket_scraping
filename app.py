@@ -2275,6 +2275,75 @@ def test_new_event():
         console_log(f"❌ TEST NEW EVENT: Error during check: {str(e)[:80]}", "error")
         return jsonify({'success': False, 'message': f'Check failed: {str(e)[:100]}'}), 500
 
+# ===== TELEGRAM TEST ENDPOINTS =====
+@app.route('/api/test-telegram', methods=['POST'])
+@rate_limit
+@require_password
+def test_telegram():
+    """Send a test message via Telegram - requires password."""
+    data = request.get_json() or {}
+    test_type = data.get('type', 'simple')  # simple, heartbeat, daily, events
+    
+    console_log(f"📱 Telegram test requested: {test_type}", "info")
+    
+    if not TELEGRAM_BOT_TOKEN:
+        return jsonify({'success': False, 'message': 'Telegram bot token not configured'}), 400
+    
+    if not TELEGRAM_CHAT_IDS:
+        return jsonify({'success': False, 'message': 'Telegram chat IDs not configured'}), 400
+    
+    if test_type == 'heartbeat':
+        # Test heartbeat format
+        success = send_telegram_heartbeat()
+        msg_type = "Heartbeat"
+    elif test_type == 'daily':
+        # Test daily summary format
+        success = send_telegram_daily_summary()
+        msg_type = "Daily Summary"
+    elif test_type == 'events':
+        # Test new events format with fake event
+        fake_events = [{
+            'title': '🧪 Test Event - Weekend Market at JBR',
+            'link': 'https://dubai-fleamarket.com/test',
+            'date_posted': datetime.now(timezone.utc).strftime('%B %d, %Y')
+        }]
+        success = send_telegram_new_events(fake_events)
+        msg_type = "New Event"
+    else:
+        # Simple test message
+        now = datetime.now(timezone.utc)
+        message = f"""🧪 <b>Test Message</b>
+
+✅ Telegram is working!
+
+📊 System Status:
+• Checks: {CONFIG['total_checks']}
+• New Events: {CONFIG['total_new_events']}
+• Uptime: {CONFIG['uptime_start'][:10]}
+
+📅 {now.strftime('%B %d, %Y at %I:%M %p UTC')}
+
+🤖 Dubai Flea Market Tracker"""
+        success, error = send_telegram(message)
+        msg_type = "Test"
+    
+    if success:
+        log_activity(f"📱 Telegram {msg_type} test sent successfully", "success")
+        return jsonify({'success': True, 'message': f'{msg_type} message sent to Telegram!'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to send Telegram message'}), 500
+
+@app.route('/api/telegram-status')
+@rate_limit
+def telegram_status():
+    """Get Telegram configuration status."""
+    return jsonify({
+        'configured': bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS),
+        'bot_token_set': bool(TELEGRAM_BOT_TOKEN),
+        'chat_ids_set': bool(TELEGRAM_CHAT_IDS),
+        'chat_count': len([c for c in TELEGRAM_CHAT_IDS.split(',') if c.strip()]) if TELEGRAM_CHAT_IDS else 0
+    })
+
 @app.route('/api/theme', methods=['GET', 'POST'])
 @rate_limit
 def handle_theme():

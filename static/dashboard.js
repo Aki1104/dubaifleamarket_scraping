@@ -453,6 +453,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set auto-scroll button state
     updateAutoScrollButton();
     
+    // Check Telegram status
+    updateTelegramStatus();
+    
     console.log('[DEBUG] Dashboard initialization complete');
 });
 
@@ -986,6 +989,79 @@ function startNotificationPolling() {
             console.error('[DEBUG] Notification poll failed:', e);
         }
     }, 30000); // Check every 30 seconds
+}
+
+// ===== TELEGRAM TEST FUNCTIONS =====
+async function testTelegram(type) {
+    const password = prompt('Enter admin password to test Telegram:');
+    if (!password) return;
+    
+    const typeLabels = {
+        'simple': 'Test Message',
+        'heartbeat': 'Heartbeat',
+        'daily': 'Daily Summary',
+        'events': 'New Event'
+    };
+    
+    const loadingToast = showToast(`Sending ${typeLabels[type] || type}...`, 'loading', true);
+    
+    try {
+        const response = await fetch('/api/test-telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, password })
+        });
+        
+        const result = await response.json();
+        removeToast(loadingToast);
+        
+        if (response.status === 401) {
+            showToast('Invalid password', 'error');
+            return;
+        }
+        
+        if (result.success) {
+            showToast(`📱 ${result.message}`, 'success');
+        } else {
+            showToast(result.message || 'Failed to send', 'error');
+        }
+    } catch (err) {
+        removeToast(loadingToast);
+        showToast('Network error', 'error');
+    }
+}
+
+// Check and update Telegram status on page load
+async function updateTelegramStatus() {
+    try {
+        const response = await fetch('/api/telegram-status');
+        const data = await response.json();
+        
+        const statusText = document.getElementById('telegram-status-text');
+        const telegramSection = document.getElementById('telegram-section');
+        
+        if (statusText) {
+            if (data.configured) {
+                statusText.innerHTML = `<span class="status-good">✓ Configured (${data.chat_count} chat${data.chat_count > 1 ? 's' : ''})</span>`;
+            } else {
+                statusText.innerHTML = '<span class="status-warn">⚠️ Not configured - Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS to Render</span>';
+            }
+        }
+        
+        // Disable buttons if not configured
+        if (telegramSection) {
+            const buttons = telegramSection.querySelectorAll('.telegram-btn');
+            buttons.forEach(btn => {
+                btn.disabled = !data.configured;
+                if (!data.configured) {
+                    btn.style.opacity = '0.5';
+                    btn.style.cursor = 'not-allowed';
+                }
+            });
+        }
+    } catch (err) {
+        console.log('[DEBUG] Failed to get Telegram status:', err);
+    }
 }
 
 // ===== TEST SINGLE EMAIL MODAL =====
