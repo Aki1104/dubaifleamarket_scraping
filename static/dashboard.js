@@ -587,10 +587,24 @@ function updateDiagnostics(diag) {
     if (data.email_provider) {
         const emailProvider = document.getElementById('diag-email-provider');
         if (emailProvider) {
-            const configured = data.email_provider.gmail_configured;
-            const ipv4 = data.email_provider.ipv4_forced ? ' (IPv4)' : '';
-            emailProvider.textContent = configured ? 'Gmail SMTP' + ipv4 : 'Not Configured';
-            emailProvider.className = 'diag-value ' + (configured ? 'good' : 'error');
+            const ep = data.email_provider;
+            let providerText = 'Not Configured';
+            let providerClass = 'error';
+            
+            if (ep.sendgrid_configured) {
+                providerText = 'SendGrid API ✓';
+                providerClass = 'good';
+                if (ep.gmail_configured) {
+                    providerText += ' + Gmail backup';
+                }
+            } else if (ep.gmail_configured) {
+                const ipv4 = ep.ipv4_forced ? ' (IPv4)' : '';
+                providerText = 'Gmail SMTP' + ipv4;
+                providerClass = 'good';
+            }
+            
+            emailProvider.textContent = providerText;
+            emailProvider.className = 'diag-value ' + providerClass;
         }
     }
     

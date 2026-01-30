@@ -30,6 +30,14 @@ import secrets
 import time
 import re
 
+# SendGrid for email (uses HTTPS API, not blocked by cloud hosts)
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail
+    SENDGRID_AVAILABLE = True
+except ImportError:
+    SENDGRID_AVAILABLE = False
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
@@ -182,7 +190,12 @@ LOGS_FILE = os.path.join(DATA_DIR, "activity_logs.json")
 RECIPIENT_STATUS_FILE = os.path.join(DATA_DIR, "recipient_status.json")
 EMAIL_HISTORY_FILE = os.path.join(DATA_DIR, "email_history.json")
 
-# Gmail SMTP (fallback)
+# SendGrid API (PRIMARY - uses HTTPS, not blocked by cloud hosts)
+# Get free API key: https://signup.sendgrid.com/ (100 emails/day free)
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
+SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL', '')  # Must be verified sender
+
+# Gmail SMTP (FALLBACK - may be blocked on some cloud hosts)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 MY_EMAIL = os.environ.get('MY_EMAIL', '')
@@ -706,63 +719,54 @@ def fetch_events():
         log_activity(f"Failed to fetch events: {e}", "error")
         return None
 
-def send_email_direct(subject, body, recipient):
-    """Direct email send without queueing. Uses Gmail SMTP."""
+def send_email_sendgrid(subject, body, recipient):
+    """Send email via SendGrid API (HTTPS - not blocked by cloud hosts)."""
     global CONFIG
     
-    if not recipient or not validate_email(recipient):
-        return False
+    if not SENDGRID_AVAILABLE:
+        console_log("⚠️ SendGrid not installed", "debug")
+        return False, "SendGrid not installed"
     
-    if not MY_EMAIL or not MY_PASSWORD:
-        console_log("❌ Gmail SMTP not configured, cannot send email", "error")
-        return False
+    if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
+        console_log("⚠️ SendGrid not configured (missing API key or from email)", "debug")
+        return False, "SendGrid not configured"
     
     try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = sanitize_string(subject, 100)
-        msg['From'] = MY_EMAIL
-        msg['To'] = recipient
-        text_part = MIMEText(body, 'plain')
-        msg.attach(text_part)
+        console_log(f"📧 Sending via SendGrid to {mask_email(recipient)}...", "debug")
         
-        server = get_smtp_connection(timeout=30)
-        try:
-            server.starttls()
-            server.login(MY_EMAIL, MY_PASSWORD)
-            server.sendmail(MY_EMAIL, recipient, msg.as_string())
-        finally:
-            server.quit()
+        message = Mail(
+            from_email=SENDGRID_FROM_EMAIL,
+            to_emails=recipient,
+            subject=sanitize_string(subject, 100),
+            plain_text_content=body
+        )
         
-        CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
-        record_stat('emails_sent', 1)
-        add_to_email_history(recipient, subject, True, "Gmail SMTP (IPv4)")
-        return True
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
         
+        if response.status_code in [200, 201, 202]:
+            CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
+            record_stat('emails_sent', 1)
+            console_log(f"✅ Email sent via SendGrid to {mask_email(recipient)} (status: {response.status_code})", "success")
+            add_to_email_history(recipient, subject, True, "SendGrid API")
+            return True, None
+        else:
+            error_msg = f"SendGrid status: {response.status_code}"
+            console_log(f"⚠️ {error_msg}", "warning")
+            return False, error_msg
+            
     except Exception as e:
-        console_log(f"⚠️ Gmail SMTP failed: {str(e)[:50]}", "debug")
-        return False
+        error_msg = str(e)[:100]
+        console_log(f"⚠️ SendGrid error: {error_msg}", "warning")
+        return False, error_msg
 
-def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
-    """Send email notification. Tries Resend first, falls back to Gmail SMTP with retry."""
+def send_email_gmail(subject, body, recipient, max_retries=3):
+    """Send email via Gmail SMTP (fallback - may be blocked on cloud hosts)."""
     global CONFIG
     
-    recipient = to_email or TO_EMAIL
-    if not recipient:
-        log_activity("No recipient email configured", "error")
-        return False
-    
-    if not validate_email(recipient):
-        log_activity(f"Invalid recipient email: {recipient[:20]}...", "error")
-        add_to_email_history(recipient, subject, False, 'Invalid email format')
-        return False
-    
-    # Check Gmail credentials
     if not MY_EMAIL or not MY_PASSWORD:
-        log_activity("Email credentials not configured", "error")
-        add_to_email_history(recipient, subject, False, 'Credentials not configured')
-        return False
+        return False, "Gmail not configured"
     
-    # Gmail SMTP with retry logic
     msg = MIMEMultipart('alternative')
     msg['Subject'] = sanitize_string(subject, 100)
     msg['From'] = MY_EMAIL
@@ -785,10 +789,9 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
             
             CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
             record_stat('emails_sent', 1)
-            log_activity(f"📧 Email sent via Gmail to {recipient[:15]}...", "success")
-            console_log(f"✅ Email delivered via Gmail to {mask_email(recipient)}", "success")
+            console_log(f"✅ Email sent via Gmail to {mask_email(recipient)}", "success")
             add_to_email_history(recipient, subject, True, "Gmail SMTP")
-            return True
+            return True, None
             
         except (OSError, socket.error) as e:
             last_error = str(e)[:50]
@@ -804,13 +807,77 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
                 continue
         except Exception as e:
             last_error = str(e)[:50]
-            console_log(f"❌ Email error: {last_error}", "error")
+            console_log(f"❌ Gmail error: {last_error}", "error")
             break
+    
+    return False, last_error
+
+def send_email_direct(subject, body, recipient):
+    """Direct email send without queueing. Tries SendGrid first, then Gmail."""
+    global CONFIG
+    
+    if not recipient or not validate_email(recipient):
+        return False
+    
+    # Try SendGrid first (HTTPS API - not blocked)
+    success, error = send_email_sendgrid(subject, body, recipient)
+    if success:
+        return True
+    
+    # Fallback to Gmail SMTP
+    if MY_EMAIL and MY_PASSWORD:
+        console_log("⚠️ SendGrid failed, trying Gmail SMTP...", "warning")
+        success, error = send_email_gmail(subject, body, recipient, max_retries=1)
+        if success:
+            return True
+    
+    console_log(f"❌ All email methods failed: {error}", "error")
+    return False
+
+def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
+    """Send email notification. Tries SendGrid first, falls back to Gmail SMTP."""
+    global CONFIG
+    
+    recipient = to_email or TO_EMAIL
+    if not recipient:
+        log_activity("No recipient email configured", "error")
+        return False
+    
+    if not validate_email(recipient):
+        log_activity(f"Invalid recipient email: {recipient[:20]}...", "error")
+        add_to_email_history(recipient, subject, False, 'Invalid email format')
+        return False
+    
+    # Check if any email service is configured
+    sendgrid_ok = SENDGRID_AVAILABLE and SENDGRID_API_KEY and SENDGRID_FROM_EMAIL
+    gmail_ok = MY_EMAIL and MY_PASSWORD
+    
+    if not sendgrid_ok and not gmail_ok:
+        log_activity("No email service configured", "error")
+        add_to_email_history(recipient, subject, False, 'No email service configured')
+        return False
+    
+    # Try SendGrid first (HTTPS API - not blocked by cloud hosts)
+    if sendgrid_ok:
+        success, error = send_email_sendgrid(subject, body, recipient)
+        if success:
+            log_activity(f"📧 Email sent via SendGrid to {recipient[:15]}...", "success")
+            return True
+        console_log(f"⚠️ SendGrid failed: {error}, trying Gmail...", "warning")
+    
+    # Fallback to Gmail SMTP with retry
+    if gmail_ok:
+        success, error = send_email_gmail(subject, body, recipient, max_retries=max_retries)
+        if success:
+            log_activity(f"📧 Email sent via Gmail to {recipient[:15]}...", "success")
+            return True
+    else:
+        error = "Gmail not configured"
     
     # All immediate retries failed - queue for deferred retry
     console_log(f"📬 Queueing email for deferred retry: {mask_email(recipient)}", "info")
     add_to_email_queue(subject, body, recipient, priority)
-    add_to_email_history(recipient, subject, False, f"Queued for retry: {last_error}")
+    add_to_email_history(recipient, subject, False, f"Queued for retry: {error}")
     return False
 
 def send_new_event_email(events):
@@ -1321,9 +1388,12 @@ def api_diagnostics():
             'enabled_recipients': len(get_recipients())
         },
         'email_provider': {
-            'primary': 'Gmail SMTP',
+            'primary': 'SendGrid API' if (SENDGRID_AVAILABLE and SENDGRID_API_KEY and SENDGRID_FROM_EMAIL) else 'Gmail SMTP',
+            'sendgrid_available': SENDGRID_AVAILABLE,
+            'sendgrid_configured': bool(SENDGRID_API_KEY and SENDGRID_FROM_EMAIL),
+            'sendgrid_from_email': SENDGRID_FROM_EMAIL if SENDGRID_FROM_EMAIL else None,
             'gmail_configured': bool(MY_EMAIL and MY_PASSWORD),
-            'from_email': MY_EMAIL,
+            'gmail_from_email': MY_EMAIL if MY_EMAIL else None,
             'ipv4_forced': SMTP_USE_IPV4
         },
         'email_queue': {
