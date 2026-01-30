@@ -197,6 +197,12 @@ MY_EMAIL = os.environ.get('MY_EMAIL', '')
 MY_PASSWORD = os.environ.get('MY_PASSWORD', '')
 TO_EMAIL = os.environ.get('TO_EMAIL', '')
 
+# Force IPv4 for SMTP connections (fixes "Network is unreachable" on some cloud hosts)
+# This is a common issue on Render, Heroku, etc. where IPv6 is attempted but not available
+SMTP_USE_IPV4 = os.environ.get('SMTP_USE_IPV4', 'true').lower() == 'true'
+
+# Note: get_smtp_connection() function is defined after console_log() below
+
 # Resend API (primary email provider)
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', 'Dubai Flea Market Bot <onboarding@resend.dev>')
@@ -455,6 +461,32 @@ def console_log(message, log_type="info"):
     if len(SYSTEM_CONSOLE) > MAX_CONSOLE_LOGS:
         SYSTEM_CONSOLE = SYSTEM_CONSOLE[:MAX_CONSOLE_LOGS]
     print(f"[CONSOLE][{log_type.upper()}] {message}")
+
+# ===== SMTP CONNECTION WITH IPv4 FORCING =====
+def get_smtp_connection(timeout=30):
+    """Create SMTP connection, forcing IPv4 if configured to avoid network issues.
+    
+    Many cloud providers (Render, Heroku, etc.) have IPv6 issues where Python's
+    smtplib tries IPv6 first but IPv6 isn't properly configured, causing
+    '[Errno 101] Network is unreachable' errors. This function forces IPv4.
+    """
+    if SMTP_USE_IPV4:
+        # Force IPv4 by resolving the hostname and connecting directly
+        try:
+            # Get IPv4 address explicitly
+            ipv4_addr = socket.gethostbyname(SMTP_SERVER)
+            console_log(f"📡 SMTP: Connecting via IPv4 ({ipv4_addr}:{SMTP_PORT})", "debug")
+            server = smtplib.SMTP(timeout=timeout)
+            server.connect(ipv4_addr, SMTP_PORT)
+            return server
+        except socket.gaierror as e:
+            console_log(f"⚠️ SMTP: IPv4 resolution failed: {e}, trying default", "warning")
+        except Exception as e:
+            console_log(f"⚠️ SMTP: IPv4 connect failed: {str(e)[:50]}, trying default", "warning")
+    
+    # Default connection (may use IPv6)
+    console_log(f"📡 SMTP: Connecting via default ({SMTP_SERVER}:{SMTP_PORT})", "debug")
+    return smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=timeout)
 
 checker_thread = None
 stop_checker = threading.Event()
@@ -752,14 +784,17 @@ def send_email_direct(subject, body, recipient):
         text_part = MIMEText(body, 'plain')
         msg.attach(text_part)
         
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+        server = get_smtp_connection(timeout=30)
+        try:
             server.starttls()
             server.login(MY_EMAIL, MY_PASSWORD)
             server.sendmail(MY_EMAIL, recipient, msg.as_string())
+        finally:
+            server.quit()
         
         CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
         record_stat('emails_sent', 1)
-        add_to_email_history(recipient, subject, True, "Gmail SMTP")
+        add_to_email_history(recipient, subject, True, "Gmail SMTP (IPv4)")
         return True
         
     except Exception as e:
@@ -814,10 +849,13 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
         try:
             console_log(f"📧 Gmail SMTP to {mask_email(recipient)} (attempt {attempt}/{max_retries})...", "debug")
             
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+            server = get_smtp_connection(timeout=30)
+            try:
                 server.starttls()
                 server.login(MY_EMAIL, MY_PASSWORD)
                 server.sendmail(MY_EMAIL, recipient, msg.as_string())
+            finally:
+                server.quit()
             
             CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
             record_stat('emails_sent', 1)
@@ -1456,11 +1494,21 @@ def diagnose_smtp():
     # Step 2: DNS resolution test
     console_log("🔧 Step 2: Testing DNS resolution...", "info")
     try:
-        import socket
         start = time.time()
         ip = socket.gethostbyname(SMTP_SERVER)
         duration = int((time.time() - start) * 1000)
-        add_step("DNS Resolution", "pass", f"{SMTP_SERVER} → {ip}", duration)
+        add_step("DNS Resolution (IPv4)", "pass", f"{SMTP_SERVER} → {ip}", duration)
+        
+        # Also check IPv6
+        try:
+            ipv6_info = socket.getaddrinfo(SMTP_SERVER, SMTP_PORT, socket.AF_INET6)
+            if ipv6_info:
+                add_step("IPv6 Available", "warning", f"IPv6 exists but may cause issues - IPv4 forcing is {'ON' if SMTP_USE_IPV4 else 'OFF'}")
+                if not SMTP_USE_IPV4:
+                    results['recommendations'].append("IPv6 is available but may cause 'Network unreachable' errors. Set SMTP_USE_IPV4=true in environment")
+        except:
+            add_step("IPv6 Available", "pass", "No IPv6 (good - avoids network issues)")
+            
     except socket.gaierror as e:
         add_step("DNS Resolution", "fail", f"Cannot resolve {SMTP_SERVER}: {str(e)}")
         results['recommendations'].append("DNS resolution failed - check network/firewall settings")
@@ -1494,9 +1542,9 @@ def diagnose_smtp():
     console_log("🔧 Step 4: Testing SMTP handshake...", "info")
     try:
         start = time.time()
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30)
+        server = get_smtp_connection(timeout=30)
         duration = int((time.time() - start) * 1000)
-        add_step("SMTP Handshake", "pass", f"Connected to SMTP server", duration)
+        add_step("SMTP Handshake", "pass", f"Connected to SMTP server (IPv4 forced: {SMTP_USE_IPV4})", duration)
         
         # Get server banner
         banner = server.ehlo_resp.decode() if server.ehlo_resp else "No banner"
