@@ -62,8 +62,17 @@ function updateTimers() {
 
 async function refreshTimersFromServer() {
     try {
+        console.log('[DEBUG] refreshTimersFromServer() fetching /api/status');
         const response = await fetch('/api/status');
+        console.log('[DEBUG] /api/status response status:', response.status);
+        
+        if (!response.ok) {
+            console.error('[DEBUG] /api/status failed with status:', response.status);
+            return;
+        }
+        
         const data = await response.json();
+        console.log('[DEBUG] /api/status data received');
         
         // Use pre-calculated seconds from server (more accurate)
         if (data.next_check_seconds !== undefined && data.next_check_seconds > 0) {
@@ -85,7 +94,7 @@ async function refreshTimersFromServer() {
             if (sentElement) sentElement.textContent = data.config.emails_sent;
         }
     } catch (e) {
-        console.log('Failed to refresh timers from server:', e);
+        console.error('[DEBUG] refreshTimersFromServer error:', e);
     }
 }
 function showToast(message, type = 'success') {
@@ -106,11 +115,17 @@ function showToast(message, type = 'success') {
 }
 
 function openModal() {
+    console.log('[DEBUG] openModal() called');
     const modal = document.getElementById('password-modal');
     const input = document.getElementById('password-input');
     const error = document.getElementById('password-error');
     
-    if (modal) modal.classList.add('show');
+    if (modal) {
+        modal.classList.add('show');
+        console.log('[DEBUG] Modal shown');
+    } else {
+        console.error('[DEBUG] password-modal element not found!');
+    }
     if (input) {
         input.value = '';
         input.focus();
@@ -119,8 +134,12 @@ function openModal() {
 }
 
 function closeModal() {
+    console.log('[DEBUG] closeModal() called');
     const modal = document.getElementById('password-modal');
-    if (modal) modal.classList.remove('show');
+    if (modal) {
+        modal.classList.remove('show');
+        console.log('[DEBUG] Modal hidden');
+    }
     
     pendingAction = null;
     pendingData = null;
@@ -161,18 +180,26 @@ function closeSettingsModal() {
 }
 
 async function saveSettings() {
+    console.log('[DEBUG] saveSettings() called');
+    
     const heartbeatEnabled = document.getElementById('settings-heartbeat')?.checked ?? true;
     const dailySummaryEnabled = document.getElementById('settings-daily-summary')?.checked ?? true;
     const trackerEnabled = document.getElementById('settings-tracker')?.checked ?? true;
     
+    console.log('[DEBUG] Settings values:', { heartbeatEnabled, dailySummaryEnabled, trackerEnabled });
+    
     // Get password first
     const password = prompt('Enter admin password to save settings:');
     if (!password) {
+        console.log('[DEBUG] User cancelled password prompt');
         showToast('Settings not saved - password required', 'warning');
         return;
     }
     
+    console.log('[DEBUG] Password entered, length:', password.length);
+    
     try {
+        console.log('[DEBUG] Sending POST to /api/settings...');
         const response = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -186,30 +213,38 @@ async function saveSettings() {
         
         const result = await response.json();
         
+        console.log('[DEBUG] Response status:', response.status);
+        console.log('[DEBUG] Response data:', result);
+        
         if (response.status === 401) {
+            console.log('[DEBUG] Authentication failed - 401');
             showToast('Invalid password', 'error');
             return;
         }
         
         if (response.status === 429) {
+            console.log('[DEBUG] Rate limited - 429');
             showToast('Too many requests. Please wait.', 'warning');
             return;
         }
         
         if (result.success) {
+            console.log('[DEBUG] Settings saved successfully');
             showToast('Settings saved successfully!', 'success');
             closeSettingsModal();
             setTimeout(() => location.reload(), 1500);
         } else {
+            console.log('[DEBUG] Settings save failed:', result.message);
             showToast(result.message || 'Failed to save settings', 'error');
         }
     } catch (error) {
-        console.error('Error saving settings:', error);
+        console.error('[DEBUG] Network/fetch error:', error);
         showToast('Network error', 'error');
     }
 }
 
 function secureAction(endpoint, successMessage, data = {}) {
+    console.log('[DEBUG] secureAction called:', endpoint, successMessage);
     pendingAction = endpoint;
     pendingData = data;
     pendingSuccessMessage = successMessage;
@@ -217,14 +252,22 @@ function secureAction(endpoint, successMessage, data = {}) {
 }
 
 async function submitPassword() {
+    console.log('[DEBUG] submitPassword() called');
+    console.log('[DEBUG] pendingAction:', pendingAction);
+    
     const passwordInput = document.getElementById('password-input');
     const errorElement = document.getElementById('password-error');
     
-    if (!passwordInput || !pendingAction) return;
+    if (!passwordInput || !pendingAction) {
+        console.log('[DEBUG] Missing passwordInput or pendingAction:', { hasInput: !!passwordInput, hasAction: !!pendingAction });
+        return;
+    }
     
     const password = passwordInput.value;
+    console.log('[DEBUG] Password entered, length:', password ? password.length : 0);
     
     if (!password) {
+        console.log('[DEBUG] Empty password');
         if (errorElement) {
             errorElement.textContent = 'Please enter password';
             errorElement.classList.add('show');
@@ -233,15 +276,19 @@ async function submitPassword() {
     }
     
     try {
+        console.log('[DEBUG] Sending POST to:', pendingAction);
         const response = await fetch(pendingAction, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...pendingData, password })
         });
         
+        console.log('[DEBUG] Response status:', response.status);
         const result = await response.json();
+        console.log('[DEBUG] Response data:', result);
         
         if (response.status === 401) {
+            console.log('[DEBUG] Authentication failed - 401');
             if (errorElement) {
                 errorElement.textContent = 'Invalid password. Please try again.';
                 errorElement.classList.add('show');
@@ -250,21 +297,25 @@ async function submitPassword() {
         }
         
         if (response.status === 429) {
+            console.log('[DEBUG] Rate limited - 429');
             showToast('Too many requests. Please wait.', 'warning');
             closeModal();
             return;
         }
         
+        console.log('[DEBUG] Closing modal and showing result');
         closeModal();
         
         if (result.success) {
             showToast(result.message || pendingSuccessMessage, 'success');
+            console.log('[DEBUG] Success - reloading page in 1.5s');
             setTimeout(() => location.reload(), 1500);
         } else {
+            console.log('[DEBUG] Action failed:', result.message);
             showToast(result.message || 'Action failed', 'error');
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('[DEBUG] Network/fetch error:', error);
         showToast('Network error', 'error');
         closeModal();
     }
@@ -336,24 +387,41 @@ async function submitShowEmail() {
     }
 }
 
+// Global error handler
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+    console.error('[GLOBAL ERROR]', msg, 'at', url, 'line:', lineNo);
+    return false;
+};
+
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('[UNHANDLED PROMISE]', event.reason);
+});
+
 // Initialize timers and polling
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('[DEBUG] DOMContentLoaded - Dashboard starting up');
+    
     // Immediately refresh timers from server on page load
+    console.log('[DEBUG] Calling refreshTimersFromServer()');
     refreshTimersFromServer();
     
     // Start timer updates
     setInterval(updateTimers, 1000);
     updateTimers();
+    console.log('[DEBUG] Timer intervals started');
     
     // Refresh timers from server every 15 seconds to stay in sync
     setInterval(refreshTimersFromServer, 15000);
     
     // Initialize console and diagnostics polling
+    console.log('[DEBUG] Starting console polling');
     updateConsoleAndDiagnostics();
     setInterval(updateConsoleAndDiagnostics, 5000);
     
     // Set auto-scroll button state
     updateAutoScrollButton();
+    
+    console.log('[DEBUG] Dashboard initialization complete');
 });
 
 // ===== SYSTEM CONSOLE FUNCTIONS =====

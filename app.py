@@ -35,7 +35,7 @@ app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 # ===== SECURITY: Rate Limiting =====
 rate_limit_data = defaultdict(list)
 RATE_LIMIT_WINDOW = 60
-RATE_LIMIT_MAX_REQUESTS = 30
+RATE_LIMIT_MAX_REQUESTS = 100  # Increased from 30 - dashboard polls frequently
 BLOCKED_IPS = set()
 BLOCK_DURATION = 300
 
@@ -51,16 +51,21 @@ def is_rate_limited():
     now = time.time()
     
     if ip in BLOCKED_IPS:
-        console_log(f"🚫 Blocked IP attempted access: {ip[:15]}...", "warning")
+        console_log(f"🚫 RATE LIMIT: Blocked IP attempted access: {ip[:15]}...", "warning")
         return True
     
     rate_limit_data[ip] = [t for t in rate_limit_data[ip] if now - t < RATE_LIMIT_WINDOW]
+    current_count = len(rate_limit_data[ip])
     
-    if len(rate_limit_data[ip]) >= RATE_LIMIT_MAX_REQUESTS:
+    # Debug log every 10 requests to avoid spam
+    if current_count > 0 and current_count % 10 == 0:
+        console_log(f"📊 RATE LIMIT: {ip[:15]}... has {current_count}/{RATE_LIMIT_MAX_REQUESTS} requests in window", "debug")
+    
+    if current_count >= RATE_LIMIT_MAX_REQUESTS:
         BLOCKED_IPS.add(ip)
         threading.Timer(BLOCK_DURATION, lambda: BLOCKED_IPS.discard(ip)).start()
         log_activity(f"⚠️ Rate limit exceeded - IP blocked: {ip[:10]}...", "warning")
-        console_log(f"🔒 Rate limit triggered: {ip[:15]}... blocked for {BLOCK_DURATION}s", "warning")
+        console_log(f"🔒 RATE LIMIT TRIGGERED: {ip[:15]}... blocked for {BLOCK_DURATION}s ({current_count} requests)", "warning")
         return True
     
     rate_limit_data[ip].append(now)
@@ -131,17 +136,28 @@ def require_password(f):
     """Decorator to require password for actions."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        data = request.get_json() or {}
-        password = data.get('password', '')
+        console_log(f"🔐 AUTH: Checking password for endpoint: {request.endpoint}", "debug")
         
-        if not verify_password(password):
-            log_activity(f"🚫 Failed auth attempt from {get_client_ip()[:10]}...", "warning")
-            console_log(f"🔐 Authentication failed for {request.endpoint} from {get_client_ip()[:15]}...", "warning")
-            return jsonify({'error': 'Invalid password', 'auth_required': True}), 401
-        
-        console_log(f"✅ Authenticated action: {request.endpoint}", "debug")
-        
-        return f(*args, **kwargs)
+        try:
+            data = request.get_json() or {}
+            password = data.get('password', '')
+            
+            console_log(f"🔐 AUTH: Password received: {'yes' if password else 'no'} (length: {len(password) if password else 0})", "debug")
+            
+            if not verify_password(password):
+                log_activity(f"🚫 Failed auth attempt from {get_client_ip()[:10]}...", "warning")
+                console_log(f"🔐 AUTH FAILED for {request.endpoint} from {get_client_ip()[:15]}...", "warning")
+                console_log(f"   └─ Expected password length: {len(ADMIN_PASSWORD)}, Got: {len(password) if password else 0}", "debug")
+                return jsonify({'error': 'Invalid password', 'auth_required': True}), 401
+            
+            console_log(f"✅ AUTH SUCCESS: {request.endpoint}", "success")
+            
+            return f(*args, **kwargs)
+        except Exception as e:
+            console_log(f"❌ AUTH ERROR: {str(e)[:80]}", "error")
+            import traceback
+            console_log(f"   └─ Traceback: {traceback.format_exc()[:200]}", "debug")
+            return jsonify({'error': 'Authentication error', 'details': str(e)[:100]}), 500
     return decorated_function
 
 # ===== SECURITY: Headers Middleware =====
@@ -919,23 +935,31 @@ def dashboard():
     
     # Get theme settings
     theme_settings = load_theme_settings()
+    console_log(f"🔧 Dashboard: Theme settings loaded: {theme_settings.get('theme', 'dark')}", "debug")
     
-    # Get live events from API for display (cached from last fetch)
+    # Get live events from API for display
+    # NOTE: Use CACHED events only to prevent dashboard hanging if API is slow
     live_events = []
     try:
-        # Use cached API data if available, otherwise fetch fresh
-        cached_events = fetch_events()
+        console_log("📡 Dashboard: Loading live events from last API response...", "debug")
+        # Check if we have cached events from the background checker
+        seen_data_for_live = load_seen_events()
+        cached_events = seen_data_for_live.get('event_details', [])
         if cached_events:
             live_events = [{
                 'id': e.get('id', 0),
-                'title': sanitize_string(e.get('title', {}).get('rendered', 'Unknown'), 200),
-                'date_posted': sanitize_string(e.get('date', 'Unknown'), 50),
+                'title': sanitize_string(str(e.get('title', 'Unknown')), 200),
+                'date_posted': sanitize_string(str(e.get('first_seen', 'Unknown')), 50),
                 'link': e.get('link', '#')
-            } for e in cached_events[:15]]  # Limit to 15 for display
-    except:
+            } for e in cached_events[-15:]]  # Get last 15 events
+            console_log(f"✅ Dashboard: Loaded {len(live_events)} cached events for display", "debug")
+        else:
+            console_log("⚠️ Dashboard: No cached events available", "debug")
+    except Exception as e:
+        console_log(f"❌ Dashboard: Error loading live events: {str(e)[:50]}", "error")
         live_events = []
     
-    console_log(f"🖥️ Dashboard page loaded - Theme: {theme_settings.get('theme', 'dark')}", "debug")
+    console_log(f"🖥️ Dashboard page loaded - Theme: {theme_settings.get('theme', 'dark')}, Events: {len(live_events)}", "debug")
     
     return render_template('dashboard.html',
         config=CONFIG,
@@ -1105,7 +1129,14 @@ def toggle_feature(feature):
 @require_password
 def update_settings():
     """Update multiple settings at once - requires password."""
-    data = request.get_json() or {}
+    console_log("⚙️ SETTINGS: update_settings endpoint called", "info")
+    
+    try:
+        data = request.get_json() or {}
+        console_log(f"⚙️ SETTINGS: Received data keys: {list(data.keys())}", "debug")
+    except Exception as e:
+        console_log(f"❌ SETTINGS: Error parsing JSON: {str(e)[:50]}", "error")
+        return jsonify({'error': 'Invalid JSON data'}), 400
     
     changes = []
     

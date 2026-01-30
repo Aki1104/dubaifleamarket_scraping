@@ -1,5 +1,23 @@
 [
   {
+    "timestamp": "2026-01-30T14:19:17.542359+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 02:19 PM",
+    "message": "\u2728 No new events found",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-30T14:19:17.541146+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 02:19 PM",
+    "message": "\ud83d\udce1 Fetched 6 events from API",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-30T14:19:15.643548+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 02:19 PM",
+    "message": "\ud83d\udd0d Starting event check...",
+    "level": "info"
+  },
+  {
     "timestamp": "2026-01-30T14:04:15.018043+00:00",
     "timestamp_formatted": "Jan 30, 2026 at 02:04 PM",
     "message": "\u2728 No new events found",
