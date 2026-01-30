@@ -51,6 +51,7 @@ def is_rate_limited():
     now = time.time()
     
     if ip in BLOCKED_IPS:
+        console_log(f"🚫 Blocked IP attempted access: {ip[:15]}...", "warning")
         return True
     
     rate_limit_data[ip] = [t for t in rate_limit_data[ip] if now - t < RATE_LIMIT_WINDOW]
@@ -59,6 +60,7 @@ def is_rate_limited():
         BLOCKED_IPS.add(ip)
         threading.Timer(BLOCK_DURATION, lambda: BLOCKED_IPS.discard(ip)).start()
         log_activity(f"⚠️ Rate limit exceeded - IP blocked: {ip[:10]}...", "warning")
+        console_log(f"🔒 Rate limit triggered: {ip[:15]}... blocked for {BLOCK_DURATION}s", "warning")
         return True
     
     rate_limit_data[ip].append(now)
@@ -134,7 +136,10 @@ def require_password(f):
         
         if not verify_password(password):
             log_activity(f"🚫 Failed auth attempt from {get_client_ip()[:10]}...", "warning")
+            console_log(f"🔐 Authentication failed for {request.endpoint} from {get_client_ip()[:15]}...", "warning")
             return jsonify({'error': 'Invalid password', 'auth_required': True}), 401
+        
+        console_log(f"✅ Authenticated action: {request.endpoint}", "debug")
         
         return f(*args, **kwargs)
     return decorated_function
@@ -190,6 +195,81 @@ MAX_LOGS = 100
 SYSTEM_CONSOLE = []
 MAX_CONSOLE_LOGS = 200
 
+# ===== EVENT STATISTICS - For charting =====
+EVENT_STATS_FILE = os.path.join(DATA_DIR, "event_stats.json")
+EVENT_STATS = {
+    'daily': {},  # {'2026-01-30': {'checks': 5, 'new_events': 2, 'emails_sent': 3}}
+    'hourly': {}  # {'2026-01-30T14': {'checks': 1, 'new_events': 0}}
+}
+
+def load_event_stats():
+    """Load event statistics from file."""
+    global EVENT_STATS
+    if os.path.exists(EVENT_STATS_FILE):
+        try:
+            with open(EVENT_STATS_FILE, 'r') as f:
+                EVENT_STATS = json.load(f)
+                console_log("📊 Event statistics loaded from file", "debug")
+        except Exception as e:
+            console_log(f"⚠️ Failed to load event stats: {e}", "warning")
+            EVENT_STATS = {'daily': {}, 'hourly': {}}
+    return EVENT_STATS
+
+def save_event_stats():
+    """Save event statistics to file."""
+    try:
+        # Keep only last 30 days of daily stats and 48 hours of hourly stats
+        now = datetime.now(timezone.utc)
+        cutoff_daily = (now - timedelta(days=30)).strftime('%Y-%m-%d')
+        cutoff_hourly = (now - timedelta(hours=48)).strftime('%Y-%m-%dT%H')
+        
+        EVENT_STATS['daily'] = {k: v for k, v in EVENT_STATS['daily'].items() if k >= cutoff_daily}
+        EVENT_STATS['hourly'] = {k: v for k, v in EVENT_STATS['hourly'].items() if k >= cutoff_hourly}
+        
+        with open(EVENT_STATS_FILE, 'w') as f:
+            json.dump(EVENT_STATS, f, indent=2)
+    except Exception as e:
+        console_log(f"⚠️ Failed to save event stats: {e}", "warning")
+
+def record_stat(stat_type, value=1):
+    """Record a statistic (checks, new_events, emails_sent)."""
+    now = datetime.now(timezone.utc)
+    day_key = now.strftime('%Y-%m-%d')
+    hour_key = now.strftime('%Y-%m-%dT%H')
+    
+    # Daily stats
+    if day_key not in EVENT_STATS['daily']:
+        EVENT_STATS['daily'][day_key] = {'checks': 0, 'new_events': 0, 'emails_sent': 0}
+    EVENT_STATS['daily'][day_key][stat_type] = EVENT_STATS['daily'][day_key].get(stat_type, 0) + value
+    
+    # Hourly stats
+    if hour_key not in EVENT_STATS['hourly']:
+        EVENT_STATS['hourly'][hour_key] = {'checks': 0, 'new_events': 0, 'emails_sent': 0}
+    EVENT_STATS['hourly'][hour_key][stat_type] = EVENT_STATS['hourly'][hour_key].get(stat_type, 0) + value
+    
+    save_event_stats()
+
+# ===== THEME SETTINGS =====
+THEME_FILE = os.path.join(DATA_DIR, "theme_settings.json")
+
+def load_theme_settings():
+    """Load theme settings."""
+    if os.path.exists(THEME_FILE):
+        try:
+            with open(THEME_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {'theme': 'dark', 'notifications_enabled': False}
+
+def save_theme_settings(settings):
+    """Save theme settings."""
+    try:
+        with open(THEME_FILE, 'w') as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        console_log(f"⚠️ Failed to save theme settings: {e}", "warning")
+
 API_DIAGNOSTICS = {
     'last_request_time': None,
     'last_response_time_ms': 0,
@@ -206,9 +286,12 @@ API_DIAGNOSTICS = {
 def console_log(message, log_type="info"):
     """Add detailed log to system console - terminal style."""
     global SYSTEM_CONSOLE
-    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    now = datetime.now(timezone.utc)
+    timestamp = now.strftime('%b %d, %Y %I:%M:%S %p')
+    timestamp_short = now.strftime('%I:%M:%S %p')
     entry = {
         'time': timestamp,
+        'time_short': timestamp_short,
         'type': log_type,  # info, success, error, warning, api, debug
         'msg': message
     }
@@ -295,10 +378,10 @@ def add_to_email_history(recipient, subject, success, error_msg=''):
     save_email_history(history)
 
 def format_timestamp(iso_string):
-    """Format ISO timestamp to readable format like 'Jan 30 at 02:45 PM'."""
+    """Format ISO timestamp to readable format like 'Jan 30, 2026 at 02:45 PM'."""
     try:
         dt = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
-        return dt.strftime('%b %d at %I:%M %p')
+        return dt.strftime('%b %d, %Y at %I:%M %p')
     except:
         return iso_string[:16] if iso_string else '--'
 
@@ -317,8 +400,10 @@ def get_recipients():
 def log_activity(message, level="info"):
     """Add activity log entry."""
     global ACTIVITY_LOGS
+    now = datetime.now(timezone.utc)
     entry = {
-        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'timestamp': now.isoformat(),
+        'timestamp_formatted': now.strftime('%b %d, %Y at %I:%M %p'),
         'message': sanitize_string(message, 200),
         'level': level
     }
@@ -487,12 +572,16 @@ def send_email(subject, body, to_email=None):
             server.sendmail(MY_EMAIL, recipient, msg.as_string())
         
         CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
+        # Record email sent statistic
+        record_stat('emails_sent', 1)
         log_activity(f"📧 Email sent to {recipient[:15]}...", "success")
+        console_log(f"✅ Email delivered successfully to {mask_email(recipient)}", "success")
         add_to_email_history(recipient, subject, True)
         return True
     except Exception as e:
         error_msg = str(e)[:50]
         log_activity(f"Failed to send email: {error_msg}", "error")
+        console_log(f"❌ Email delivery failed: {error_msg}", "error")
         add_to_email_history(recipient, subject, False, error_msg)
         return False
 
@@ -610,6 +699,8 @@ def check_for_events():
     CONFIG['last_check'] = datetime.now(timezone.utc).isoformat()
     CONFIG['total_checks'] += 1
     
+    # Record check statistic
+    record_stat('checks', 1)
     console_log(f"📊 Check #{CONFIG['total_checks']} initiated", "info")
     console_log(f"   └─ Interval: Every {CONFIG['check_interval_minutes']} minutes", "debug")
     
@@ -662,6 +753,8 @@ def check_for_events():
     
     if new_events:
         CONFIG['total_new_events'] += len(new_events)
+        # Record new events statistic
+        record_stat('new_events', len(new_events))
         console_log(f"🎉 FOUND {len(new_events)} NEW EVENT(S)!", "success")
         log_activity(f"🆕 Found {len(new_events)} NEW event(s)!", "success")
         
@@ -711,6 +804,7 @@ def background_checker():
     
     consecutive_errors = 0
     max_consecutive_errors = 5
+    check_interval_seconds = CONFIG['check_interval_minutes'] * 60
     
     while not stop_checker.is_set():
         if CONFIG['tracker_enabled']:
@@ -720,28 +814,60 @@ def background_checker():
                 
                 if should_send_heartbeat():
                     log_activity("💓 Sending scheduled heartbeat...")
+                    console_log("💓 Sending scheduled heartbeat email...", "info")
                     if send_heartbeat():
                         status = load_status()
                         status['last_heartbeat'] = datetime.now(timezone.utc).isoformat()
                         save_status(status)
                         CONFIG['next_heartbeat'] = (datetime.now(timezone.utc) + timedelta(hours=CONFIG['heartbeat_hours'])).isoformat()
                         log_activity("💓 Heartbeat sent!", "success")
+                        console_log("✅ Heartbeat email sent successfully", "success")
                 
             except Exception as e:
                 consecutive_errors += 1
                 error_msg = str(e)[:50]
+                import traceback
+                full_trace = traceback.format_exc()
                 log_activity(f"Error in checker ({consecutive_errors}/{max_consecutive_errors}): {error_msg}", "error")
                 console_log(f"⚠️ Checker error ({consecutive_errors}/{max_consecutive_errors}): {error_msg}", "error")
+                console_log(f"   └─ Exception type: {type(e).__name__}", "debug")
+                console_log(f"   └─ Full trace logged to console", "debug")
+                print(f"[FULL TRACEBACK]\n{full_trace}")
                 
                 # If too many consecutive errors, wait longer before retry
                 if consecutive_errors >= max_consecutive_errors:
                     console_log("🔄 Too many errors, entering recovery mode (5 min cooldown)", "warning")
+                    console_log(f"   └─ Error threshold reached: {max_consecutive_errors} consecutive failures", "debug")
                     log_activity("⚠️ Entering recovery mode due to repeated errors", "warning")
                     stop_checker.wait(timeout=300)  # Wait 5 minutes
                     consecutive_errors = 0  # Reset after cooldown
                     console_log("🔄 Recovery cooldown complete, resuming normal operation", "info")
         
-        stop_checker.wait(timeout=CONFIG['check_interval_minutes'] * 60)
+        # Wait for next check with countdown logging
+        wait_start = datetime.now(timezone.utc)
+        elapsed = 0
+        logged_milestones = set()  # Track which milestones we've logged
+        
+        while elapsed < check_interval_seconds and not stop_checker.is_set():
+            remaining = check_interval_seconds - elapsed
+            
+            # Log countdown at certain intervals (check ranges to avoid missing exact values)
+            milestones = [
+                (600, 601, "10 minutes"),
+                (300, 301, "5 minutes"),
+                (120, 121, "2 minutes"),
+                (60, 61, "1 minute"),
+                (30, 31, "30 seconds"),
+                (10, 11, "10 seconds"),
+            ]
+            
+            for low, high, label in milestones:
+                if low <= remaining < high and low not in logged_milestones:
+                    console_log(f"⏳ Next check in {label}...", "debug")
+                    logged_milestones.add(low)
+            
+            stop_checker.wait(timeout=1)
+            elapsed = int((datetime.now(timezone.utc) - wait_start).total_seconds())
     
     log_activity("Background checker stopped", "warning")
     console_log("⏹️ Background checker stopped", "warning")
@@ -791,6 +917,9 @@ def dashboard():
     all_recipients = get_all_recipients()
     recipient_status = load_recipient_status()
     
+    # Get theme settings
+    theme_settings = load_theme_settings()
+    
     # Get live events from API for display (cached from last fetch)
     live_events = []
     try:
@@ -806,6 +935,8 @@ def dashboard():
     except:
         live_events = []
     
+    console_log(f"🖥️ Dashboard page loaded - Theme: {theme_settings.get('theme', 'dark')}", "debug")
+    
     return render_template('dashboard.html',
         config=CONFIG,
         status=status,
@@ -820,7 +951,9 @@ def dashboard():
         next_heartbeat_seconds=next_heartbeat_seconds,
         uptime_str=uptime_str,
         current_time=now.strftime('%B %d, %Y at %I:%M %p UTC'),
-        email_history=load_email_history()[-20:][::-1]
+        email_history=load_email_history()[-20:][::-1],
+        theme=theme_settings.get('theme', 'dark'),
+        notifications_enabled=theme_settings.get('notifications_enabled', False)
     )
 
 @app.route('/health')
@@ -846,15 +979,35 @@ def health():
 @app.route('/api/status')
 @rate_limit
 def api_status():
-    """API endpoint for status data."""
+    """API endpoint for status data with calculated timer values."""
     status = load_status()
     seen_data = load_seen_events()
+    now = datetime.now(timezone.utc)
+    
+    # Calculate remaining seconds for timers
+    next_check_seconds = 0
+    if CONFIG['next_check']:
+        try:
+            next_dt = datetime.fromisoformat(CONFIG['next_check'].replace('Z', '+00:00'))
+            next_check_seconds = max(0, int((next_dt - now).total_seconds()))
+        except:
+            pass
+    
+    next_heartbeat_seconds = 0
+    if CONFIG['next_heartbeat']:
+        try:
+            next_dt = datetime.fromisoformat(CONFIG['next_heartbeat'].replace('Z', '+00:00'))
+            next_heartbeat_seconds = max(0, int((next_dt - now).total_seconds()))
+        except:
+            pass
     
     return jsonify({
         'config': CONFIG,
         'status': status,
         'seen_count': len(seen_data.get('event_ids', [])),
-        'logs': ACTIVITY_LOGS[:20]
+        'logs': ACTIVITY_LOGS[:20],
+        'next_check_seconds': next_check_seconds,
+        'next_heartbeat_seconds': next_heartbeat_seconds
     })
 
 @app.route('/api/console')
@@ -946,6 +1099,45 @@ def toggle_feature(feature):
         log_activity(f"🔄 Daily summary {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
     
     return jsonify({'success': True, 'enabled': enabled, 'config': CONFIG})
+
+@app.route('/api/settings', methods=['POST'])
+@rate_limit
+@require_password
+def update_settings():
+    """Update multiple settings at once - requires password."""
+    data = request.get_json() or {}
+    
+    changes = []
+    
+    # Heartbeat setting
+    if 'heartbeat_enabled' in data:
+        new_val = bool(data['heartbeat_enabled'])
+        if CONFIG['heartbeat_enabled'] != new_val:
+            CONFIG['heartbeat_enabled'] = new_val
+            changes.append(f"Heartbeat {'enabled' if new_val else 'disabled'}")
+            console_log(f"💓 Heartbeat monitoring {'enabled' if new_val else 'disabled'}", "success" if new_val else "warning")
+    
+    # Daily summary setting
+    if 'daily_summary_enabled' in data:
+        new_val = bool(data['daily_summary_enabled'])
+        if CONFIG['daily_summary_enabled'] != new_val:
+            CONFIG['daily_summary_enabled'] = new_val
+            changes.append(f"Daily summary {'enabled' if new_val else 'disabled'}")
+            console_log(f"📅 Daily summary {'enabled' if new_val else 'disabled'}", "success" if new_val else "warning")
+    
+    # Tracker setting
+    if 'tracker_enabled' in data:
+        new_val = bool(data['tracker_enabled'])
+        if CONFIG['tracker_enabled'] != new_val:
+            CONFIG['tracker_enabled'] = new_val
+            changes.append(f"Tracker {'enabled' if new_val else 'disabled'}")
+            console_log(f"🔄 Event tracker {'enabled' if new_val else 'disabled'}", "success" if new_val else "warning")
+    
+    if changes:
+        log_activity(f"⚙️ Settings updated: {', '.join(changes)}", "success")
+        return jsonify({'success': True, 'message': f"Updated: {', '.join(changes)}", 'config': CONFIG})
+    else:
+        return jsonify({'success': True, 'message': 'No changes made', 'config': CONFIG})
 
 @app.route('/api/toggle-recipient/<email>', methods=['POST'])
 @rate_limit
@@ -1146,7 +1338,313 @@ def clear_logs():
     global ACTIVITY_LOGS
     ACTIVITY_LOGS = []
     log_activity("🗑️ Logs cleared", "info")
+    console_log("🗑️ Activity logs cleared by admin", "info")
     return jsonify({'success': True})
+
+# ===== NEW API ENDPOINTS =====
+
+@app.route('/api/stats')
+@rate_limit
+def get_stats():
+    """Get event statistics for charting."""
+    console_log("📊 Stats API requested", "debug")
+    load_event_stats()
+    
+    # Prepare data for charts (last 7 days and last 24 hours)
+    now = datetime.now(timezone.utc)
+    
+    daily_labels = []
+    daily_checks = []
+    daily_events = []
+    daily_emails = []
+    
+    for i in range(6, -1, -1):
+        day = (now - timedelta(days=i)).strftime('%Y-%m-%d')
+        day_display = (now - timedelta(days=i)).strftime('%b %d')
+        daily_labels.append(day_display)
+        stats = EVENT_STATS['daily'].get(day, {'checks': 0, 'new_events': 0, 'emails_sent': 0})
+        daily_checks.append(stats.get('checks', 0))
+        daily_events.append(stats.get('new_events', 0))
+        daily_emails.append(stats.get('emails_sent', 0))
+    
+    hourly_labels = []
+    hourly_checks = []
+    hourly_events = []
+    
+    for i in range(23, -1, -1):
+        hour = (now - timedelta(hours=i)).strftime('%Y-%m-%dT%H')
+        hour_display = (now - timedelta(hours=i)).strftime('%H:00')
+        hourly_labels.append(hour_display)
+        stats = EVENT_STATS['hourly'].get(hour, {'checks': 0, 'new_events': 0})
+        hourly_checks.append(stats.get('checks', 0))
+        hourly_events.append(stats.get('new_events', 0))
+    
+    return jsonify({
+        'daily': {
+            'labels': daily_labels,
+            'checks': daily_checks,
+            'new_events': daily_events,
+            'emails_sent': daily_emails
+        },
+        'hourly': {
+            'labels': hourly_labels,
+            'checks': hourly_checks,
+            'new_events': hourly_events
+        },
+        'totals': {
+            'checks': CONFIG['total_checks'],
+            'new_events': CONFIG['total_new_events'],
+            'emails_sent': CONFIG['emails_sent']
+        }
+    })
+
+@app.route('/api/export-logs')
+@rate_limit
+def export_logs():
+    """Export activity logs as JSON or CSV."""
+    format_type = request.args.get('format', 'json')
+    console_log(f"📤 Exporting logs as {format_type.upper()}", "info")
+    
+    if format_type == 'csv':
+        import csv
+        from io import StringIO
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Timestamp', 'Level', 'Message'])
+        
+        for log in ACTIVITY_LOGS:
+            writer.writerow([
+                log.get('timestamp_formatted', log.get('timestamp', '')),
+                log.get('level', 'info'),
+                log.get('message', '')
+            ])
+        
+        response = app.response_class(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment;filename=activity_logs.csv'}
+        )
+        return response
+    else:
+        from flask import Response
+        return Response(
+            json.dumps(ACTIVITY_LOGS, indent=2),
+            mimetype='application/json',
+            headers={'Content-Disposition': 'attachment;filename=activity_logs.json'}
+        )
+
+@app.route('/api/export-events')
+@rate_limit
+def export_events():
+    """Export tracked events as JSON or CSV."""
+    format_type = request.args.get('format', 'json')
+    console_log(f"📤 Exporting events as {format_type.upper()}", "info")
+    
+    seen_data = load_seen_events()
+    events = seen_data.get('event_details', [])
+    
+    if format_type == 'csv':
+        import csv
+        from io import StringIO
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['ID', 'Title', 'Date Posted', 'Link', 'First Seen'])
+        
+        for event in events:
+            writer.writerow([
+                event.get('id', ''),
+                event.get('title', ''),
+                event.get('date_posted', ''),
+                event.get('link', ''),
+                event.get('first_seen', '')
+            ])
+        
+        response = app.response_class(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment;filename=tracked_events.csv'}
+        )
+        return response
+    else:
+        from flask import Response
+        return Response(
+            json.dumps(events, indent=2),
+            mimetype='application/json',
+            headers={'Content-Disposition': 'attachment;filename=tracked_events.json'}
+        )
+
+@app.route('/api/test-single-email', methods=['POST'])
+@rate_limit
+@require_password
+def test_single_email():
+    """Send test email to a single recipient - requires password."""
+    data = request.get_json() or {}
+    email = data.get('email', '')
+    
+    console_log(f"📧 Test single email requested for: {mask_email(email)}", "info")
+    
+    if not email:
+        return jsonify({'success': False, 'message': 'Email required'}), 400
+    
+    if not validate_email(email):
+        return jsonify({'success': False, 'message': 'Invalid email format'}), 400
+    
+    # Check if email is in recipients list
+    if email not in get_all_recipients():
+        return jsonify({'success': False, 'message': 'Email not in recipient list'}), 400
+    
+    subject = "🧪 Test Email - Dubai Flea Market Tracker"
+    body = f"""
+🧪 TEST EMAIL
+
+This is a test email from the Dubai Flea Market Event Tracker.
+
+📊 System Status:
+━━━━━━━━━━━━━━━━━
+✅ Total Checks: {CONFIG['total_checks']}
+✅ New Events Found: {CONFIG['total_new_events']}
+✅ Emails Sent: {CONFIG['emails_sent']}
+
+If you received this email, your notification setup is working correctly!
+
+🤖 Sent automatically by Dubai Flea Market Tracker
+📅 {datetime.now(timezone.utc).strftime('%b %d, %Y at %I:%M %p UTC')}
+"""
+    
+    if send_email(subject, body, email):
+        log_activity(f"📧 Test email sent to {mask_email(email)}", "success")
+        return jsonify({'success': True, 'message': f'Test email sent to {mask_email(email)}'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to send test email'}), 500
+
+@app.route('/api/test-new-event', methods=['POST'])
+@rate_limit
+@require_password
+def test_new_event():
+    """Remove latest event from DB and trigger a real 'new event' notification.
+    This tests the full notification flow by:
+    1. Removing the most recent event from seen_events.json
+    2. Immediately triggering an API check
+    3. The event will be detected as 'new' and emails sent to all recipients
+    """
+    console_log("⚡ TEST NEW EVENT: Starting real notification test...", "warning")
+    log_activity("⚡ Test new event notification triggered", "warning")
+    
+    # Load seen events
+    seen_data = load_seen_events()
+    event_ids = seen_data.get('event_ids', [])
+    event_details = seen_data.get('event_details', [])
+    
+    if not event_ids or not event_details:
+        console_log("❌ TEST NEW EVENT: No events in database to remove", "error")
+        return jsonify({'success': False, 'message': 'No events in database to test with'}), 400
+    
+    # Get the latest event (most recently added)
+    latest_event = event_details[-1] if event_details else None
+    latest_id = event_ids[-1] if event_ids else None
+    
+    if not latest_id or not latest_event:
+        return jsonify({'success': False, 'message': 'Could not find latest event'}), 400
+    
+    # Log what we're removing
+    console_log(f"📝 TEST NEW EVENT: Removing event ID {latest_id}: {latest_event.get('title', 'Unknown')[:50]}...", "info")
+    
+    # Remove the latest event
+    seen_data['event_ids'] = event_ids[:-1]  # Remove last ID
+    seen_data['event_details'] = event_details[:-1]  # Remove last detail
+    
+    # Save the modified database
+    save_seen_events(seen_data)
+    console_log(f"✅ TEST NEW EVENT: Event removed from database ({len(event_ids)-1} events remaining)", "success")
+    
+    # Now trigger an immediate event check
+    console_log("🔄 TEST NEW EVENT: Triggering immediate API check...", "info")
+    
+    try:
+        # This will detect the removed event as 'new' and send notifications
+        check_for_events()
+        console_log("✅ TEST NEW EVENT: Check completed - notification should have been sent", "success")
+        log_activity("✅ Test new event notification completed", "success")
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Removed event "{latest_event.get("title", "Unknown")[:40]}..." and triggered notification check. Check your email!'
+        })
+    except Exception as e:
+        console_log(f"❌ TEST NEW EVENT: Error during check: {str(e)[:80]}", "error")
+        return jsonify({'success': False, 'message': f'Check failed: {str(e)[:100]}'}), 500
+
+@app.route('/api/theme', methods=['GET', 'POST'])
+@rate_limit
+def handle_theme():
+    """Get or set theme settings."""
+    if request.method == 'GET':
+        settings = load_theme_settings()
+        return jsonify(settings)
+    else:
+        data = request.get_json() or {}
+        settings = load_theme_settings()
+        
+        if 'theme' in data:
+            settings['theme'] = data['theme']
+            console_log(f"🎨 Theme changed to: {data['theme']}", "info")
+        
+        if 'notifications_enabled' in data:
+            settings['notifications_enabled'] = data['notifications_enabled']
+            console_log(f"🔔 Notifications {'enabled' if data['notifications_enabled'] else 'disabled'}", "info")
+        
+        save_theme_settings(settings)
+        return jsonify({'success': True, 'settings': settings})
+
+@app.route('/api/search-events')
+@rate_limit
+def search_events():
+    """Search through tracked events."""
+    query = request.args.get('q', '').lower().strip()
+    console_log(f"🔍 Event search: '{query}'", "debug")
+    
+    if not query:
+        return jsonify({'events': [], 'count': 0})
+    
+    seen_data = load_seen_events()
+    events = seen_data.get('event_details', [])
+    
+    # Search in title
+    matched = [e for e in events if query in e.get('title', '').lower()]
+    
+    return jsonify({
+        'events': matched[:50],  # Limit to 50 results
+        'count': len(matched),
+        'query': query
+    })
+
+@app.route('/api/notification-check')
+@rate_limit
+def notification_check():
+    """Check if there are new events for browser notifications."""
+    # This endpoint can be polled by the frontend to check for new events
+    last_check = request.args.get('since', '')
+    
+    seen_data = load_seen_events()
+    events = seen_data.get('event_details', [])
+    
+    if not last_check:
+        return jsonify({'new_events': [], 'count': 0})
+    
+    # Find events added since last check
+    new_events = []
+    for event in events:
+        first_seen = event.get('first_seen', '')
+        if first_seen > last_check:
+            new_events.append(event)
+    
+    return jsonify({
+        'new_events': new_events,
+        'count': len(new_events),
+        'last_check': datetime.now(timezone.utc).strftime('%b %d, %Y at %I:%M %p')
+    })
 
 # ===== STARTUP =====
 def start_background_checker():
@@ -1161,18 +1659,26 @@ def watchdog_thread():
     """Watchdog that monitors and restarts the background checker if it dies."""
     global checker_thread
     console_log("🐕 Watchdog thread started - monitoring background checker", "debug")
+    console_log("   └─ Check interval: 60 seconds", "debug")
+    
+    restart_count = 0
     
     while True:
         try:
             time.sleep(60)  # Check every minute
             
-            if checker_thread is None or not checker_thread.is_alive():
-                console_log("🔄 WATCHDOG: Background checker not running, restarting...", "warning")
-                log_activity("🔄 Watchdog restarting background checker", "warning")
+            is_alive = checker_thread is not None and checker_thread.is_alive()
+            
+            if not is_alive:
+                restart_count += 1
+                console_log(f"🔄 WATCHDOG: Background checker not running (restart #{restart_count})", "warning")
+                console_log(f"   └─ Thread state: {'None' if checker_thread is None else 'Dead'}", "debug")
+                log_activity(f"🔄 Watchdog restarting background checker (attempt #{restart_count})", "warning")
                 
                 # Reset timer values on restart
                 CONFIG['next_check'] = (datetime.now(timezone.utc) + timedelta(minutes=CONFIG['check_interval_minutes'])).isoformat()
                 CONFIG['next_heartbeat'] = (datetime.now(timezone.utc) + timedelta(hours=CONFIG['heartbeat_hours'])).isoformat()
+                console_log(f"   └─ Timers reset: next check in {CONFIG['check_interval_minutes']} min", "debug")
                 
                 start_background_checker()
                 console_log("✅ WATCHDOG: Background checker restarted successfully", "success")
@@ -1186,6 +1692,7 @@ def start_watchdog():
 
 load_logs()
 load_recipient_status()
+load_event_stats()
 
 # ===== STARTUP CONSOLE MESSAGES =====
 console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
@@ -1195,6 +1702,7 @@ console_log(f"📡 API Endpoint: {API_URL}", "debug")
 console_log(f"⏰ Check Interval: {CONFIG['check_interval_minutes']} minutes", "debug")
 console_log(f"💓 Heartbeat: Every {CONFIG['heartbeat_hours']} hours", "debug")
 console_log(f"👥 Recipients configured: {len(get_all_recipients())}", "debug")
+console_log(f"📊 Event stats loaded: {len(EVENT_STATS.get('daily', {}))} days of data", "debug")
 console_log("✅ System initialized successfully", "success")
 console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
 

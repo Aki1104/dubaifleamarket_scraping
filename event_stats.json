@@ -1,0 +1,16 @@
+{
+  "daily": {
+    "2026-01-30": {
+      "checks": 2,
+      "new_events": 0,
+      "emails_sent": 0
+    }
+  },
+  "hourly": {
+    "2026-01-30T13": {
+      "checks": 2,
+      "new_events": 0,
+      "emails_sent": 0
+    }
+  }
+}

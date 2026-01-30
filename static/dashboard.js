@@ -65,30 +65,27 @@ async function refreshTimersFromServer() {
         const response = await fetch('/api/status');
         const data = await response.json();
         
+        // Use pre-calculated seconds from server (more accurate)
+        if (data.next_check_seconds !== undefined && data.next_check_seconds > 0) {
+            nextCheckSeconds = data.next_check_seconds;
+            console.log('Timer refreshed from server: next check in', nextCheckSeconds, 'seconds');
+        }
+        
+        if (data.next_heartbeat_seconds !== undefined && data.next_heartbeat_seconds > 0) {
+            nextHeartbeatSeconds = data.next_heartbeat_seconds;
+            console.log('Timer refreshed from server: next heartbeat in', nextHeartbeatSeconds, 'seconds');
+        }
+        
+        // Update stats while we're at it
         if (data.config) {
-            // Recalculate timer values from next_check and next_heartbeat
-            const now = new Date();
+            const checksElement = document.getElementById('total-checks');
+            const sentElement = document.getElementById('emails-sent');
             
-            if (data.config.next_check) {
-                const nextCheck = new Date(data.config.next_check);
-                const checkDiff = Math.max(0, Math.floor((nextCheck - now) / 1000));
-                if (checkDiff > 0) {
-                    nextCheckSeconds = checkDiff;
-                    console.log('Timer refreshed: next check in', checkDiff, 'seconds');
-                }
-            }
-            
-            if (data.config.next_heartbeat) {
-                const nextHeartbeat = new Date(data.config.next_heartbeat);
-                const heartbeatDiff = Math.max(0, Math.floor((nextHeartbeat - now) / 1000));
-                if (heartbeatDiff > 0) {
-                    nextHeartbeatSeconds = heartbeatDiff;
-                    console.log('Timer refreshed: next heartbeat in', heartbeatDiff, 'seconds');
-                }
-            }
+            if (checksElement) checksElement.textContent = data.config.total_checks;
+            if (sentElement) sentElement.textContent = data.config.emails_sent;
         }
     } catch (e) {
-        console.log('Failed to refresh timers from server');
+        console.log('Failed to refresh timers from server:', e);
     }
 }
 function showToast(message, type = 'success') {
@@ -150,6 +147,66 @@ function closeShowEmailModal() {
     if (modal) modal.classList.remove('show');
     
     pendingMaskedEmail = null;
+}
+
+// ===== SETTINGS MODAL =====
+function openSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) modal.classList.add('show');
+}
+
+function closeSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+async function saveSettings() {
+    const heartbeatEnabled = document.getElementById('settings-heartbeat')?.checked ?? true;
+    const dailySummaryEnabled = document.getElementById('settings-daily-summary')?.checked ?? true;
+    const trackerEnabled = document.getElementById('settings-tracker')?.checked ?? true;
+    
+    // Get password first
+    const password = prompt('Enter admin password to save settings:');
+    if (!password) {
+        showToast('Settings not saved - password required', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                password: password,
+                heartbeat_enabled: heartbeatEnabled,
+                daily_summary_enabled: dailySummaryEnabled,
+                tracker_enabled: trackerEnabled
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.status === 401) {
+            showToast('Invalid password', 'error');
+            return;
+        }
+        
+        if (response.status === 429) {
+            showToast('Too many requests. Please wait.', 'warning');
+            return;
+        }
+        
+        if (result.success) {
+            showToast('Settings saved successfully!', 'success');
+            closeSettingsModal();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast(result.message || 'Failed to save settings', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        showToast('Network error', 'error');
+    }
 }
 
 function secureAction(endpoint, successMessage, data = {}) {
@@ -281,29 +338,15 @@ async function submitShowEmail() {
 
 // Initialize timers and polling
 document.addEventListener('DOMContentLoaded', function() {
+    // Immediately refresh timers from server on page load
+    refreshTimersFromServer();
+    
     // Start timer updates
     setInterval(updateTimers, 1000);
     updateTimers();
     
-    // Periodic status polling
-    setInterval(async () => {
-        try {
-            const response = await fetch('/api/status');
-            const data = await response.json();
-            
-            const checksElement = document.getElementById('total-checks');
-            const sentElement = document.getElementById('emails-sent');
-            
-            if (checksElement && data.config) {
-                checksElement.textContent = data.config.total_checks;
-            }
-            if (sentElement && data.config) {
-                sentElement.textContent = data.config.emails_sent;
-            }
-        } catch (e) {
-            console.log('Failed to update status');
-        }
-    }, 30000);
+    // Refresh timers from server every 15 seconds to stay in sync
+    setInterval(refreshTimersFromServer, 15000);
     
     // Initialize console and diagnostics polling
     updateConsoleAndDiagnostics();
@@ -356,7 +399,8 @@ function updateTerminal(consoleLogs) {
     
     // Build terminal HTML (logs are already in reverse order from server)
     const html = consoleLogs.slice(0, 50).reverse().map(log => {
-        const time = log.time ? log.time.split(' ')[1] || log.time : '--:--:--';
+        // Use short time format (HH:MM:SS AM/PM)
+        const time = log.time_short || log.time || '--:--:--';
         return `
             <div class="terminal-line ${log.type}">
                 <span class="term-time">${time}</span>
@@ -463,3 +507,431 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ===== STATISTICS CHART =====
+var statsChart = null;
+var currentChartView = 'daily';
+
+function initStatsChart() {
+    console.log('[DEBUG] Initializing stats chart...');
+    const ctx = document.getElementById('statsChart');
+    if (!ctx) {
+        console.log('[DEBUG] Chart canvas not found');
+        return;
+    }
+    
+    statsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Checks',
+                    data: [],
+                    backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'New Events',
+                    data: [],
+                    backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Emails Sent',
+                    data: [],
+                    backgroundColor: 'rgba(245, 158, 11, 0.7)',
+                    borderColor: 'rgba(245, 158, 11, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: '#8888a0',
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    ticks: { color: '#8888a0' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(42, 42, 58, 0.5)' },
+                    ticks: { color: '#8888a0', stepSize: 1 }
+                }
+            }
+        }
+    });
+    
+    loadChartData('daily');
+}
+
+async function loadChartData(view) {
+    console.log('[DEBUG] Loading chart data for view:', view);
+    try {
+        const response = await fetch('/api/stats');
+        const data = await response.json();
+        
+        if (view === 'daily') {
+            statsChart.data.labels = data.daily.labels;
+            statsChart.data.datasets[0].data = data.daily.checks;
+            statsChart.data.datasets[1].data = data.daily.new_events;
+            statsChart.data.datasets[2].data = data.daily.emails_sent;
+        } else {
+            statsChart.data.labels = data.hourly.labels;
+            statsChart.data.datasets[0].data = data.hourly.checks;
+            statsChart.data.datasets[1].data = data.hourly.new_events;
+            statsChart.data.datasets[2].data = []; // No emails in hourly view
+        }
+        
+        statsChart.update();
+        console.log('[DEBUG] Chart updated successfully');
+    } catch (e) {
+        console.error('[DEBUG] Failed to load chart data:', e);
+    }
+}
+
+function switchChartView(view) {
+    currentChartView = view;
+    
+    // Update button states
+    document.getElementById('chart-daily-btn').classList.toggle('active', view === 'daily');
+    document.getElementById('chart-hourly-btn').classList.toggle('active', view === 'hourly');
+    
+    loadChartData(view);
+}
+
+// ===== EVENT SEARCH =====
+function searchEvents() {
+    const query = document.getElementById('event-search').value.toLowerCase().trim();
+    const events = document.querySelectorAll('#past-events-list .event-item');
+    const clearBtn = document.getElementById('search-clear-btn');
+    const resultsInfo = document.getElementById('search-results-info');
+    
+    clearBtn.style.display = query ? 'flex' : 'none';
+    
+    let matchCount = 0;
+    events.forEach(event => {
+        const title = event.dataset.title || '';
+        if (title.includes(query) || !query) {
+            event.style.display = 'flex';
+            matchCount++;
+        } else {
+            event.style.display = 'none';
+        }
+    });
+    
+    if (query && events.length > 0) {
+        resultsInfo.style.display = 'block';
+        resultsInfo.textContent = `Found ${matchCount} event(s) matching "${query}"`;
+    } else {
+        resultsInfo.style.display = 'none';
+    }
+    
+    console.log('[DEBUG] Event search:', query, '- Found:', matchCount);
+}
+
+function clearEventSearch() {
+    document.getElementById('event-search').value = '';
+    searchEvents();
+}
+
+// ===== THEME TOGGLE =====
+function toggleTheme() {
+    const isDark = document.getElementById('settings-theme').checked;
+    const theme = isDark ? 'dark' : 'light';
+    
+    document.body.className = 'theme-' + theme;
+    document.documentElement.setAttribute('data-theme', theme);
+    
+    // Save to server
+    fetch('/api/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: theme })
+    }).then(() => {
+        console.log('[DEBUG] Theme saved:', theme);
+    });
+    
+    // Update chart colors if exists
+    if (statsChart) {
+        const textColor = isDark ? '#8888a0' : '#5a5a70';
+        const gridColor = isDark ? 'rgba(42, 42, 58, 0.5)' : 'rgba(200, 200, 210, 0.5)';
+        statsChart.options.scales.x.ticks.color = textColor;
+        statsChart.options.scales.y.ticks.color = textColor;
+        statsChart.options.scales.x.grid.color = gridColor;
+        statsChart.options.scales.y.grid.color = gridColor;
+        statsChart.options.plugins.legend.labels.color = textColor;
+        statsChart.update();
+    }
+}
+
+// ===== BROWSER NOTIFICATIONS =====
+var notificationsEnabled = false;
+var lastNotificationCheck = '';
+
+function checkNotificationPermission() {
+    if (!('Notification' in window)) {
+        console.log('[DEBUG] Browser does not support notifications');
+        updateNotificationStatus('Not supported');
+        return;
+    }
+    
+    if (Notification.permission === 'granted') {
+        notificationsEnabled = true;
+        updateNotificationStatus('Enabled');
+        startNotificationPolling();
+    } else if (Notification.permission === 'denied') {
+        updateNotificationStatus('Blocked');
+    } else {
+        updateNotificationStatus('Click to enable');
+    }
+}
+
+function toggleNotifications() {
+    const checkbox = document.getElementById('settings-notifications');
+    
+    if (!('Notification' in window)) {
+        showToast('Browser does not support notifications', 'warning');
+        checkbox.checked = false;
+        return;
+    }
+    
+    if (checkbox.checked) {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                notificationsEnabled = true;
+                updateNotificationStatus('Enabled');
+                showToast('Notifications enabled!', 'success');
+                
+                // Send test notification
+                new Notification('🏪 Dubai Flea Market Tracker', {
+                    body: 'Notifications are now enabled! You will be alerted when new events are found.',
+                    icon: '🏪'
+                });
+                
+                startNotificationPolling();
+                saveNotificationSetting(true);
+            } else {
+                checkbox.checked = false;
+                updateNotificationStatus('Blocked');
+                showToast('Notification permission denied', 'warning');
+            }
+        });
+    } else {
+        notificationsEnabled = false;
+        updateNotificationStatus('Disabled');
+        saveNotificationSetting(false);
+    }
+}
+
+function updateNotificationStatus(status) {
+    const statusEl = document.getElementById('notification-status');
+    if (statusEl) statusEl.textContent = status;
+}
+
+function saveNotificationSetting(enabled) {
+    fetch('/api/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notifications_enabled: enabled })
+    });
+}
+
+function startNotificationPolling() {
+    if (!notificationsEnabled) return;
+    
+    lastNotificationCheck = new Date().toISOString();
+    
+    setInterval(async () => {
+        if (!notificationsEnabled) return;
+        
+        try {
+            const response = await fetch(`/api/notification-check?since=${encodeURIComponent(lastNotificationCheck)}`);
+            const data = await response.json();
+            
+            if (data.count > 0) {
+                console.log('[DEBUG] New events for notification:', data.count);
+                
+                data.new_events.forEach(event => {
+                    new Notification('🆕 New Dubai Flea Market Event!', {
+                        body: event.title,
+                        icon: '🏪',
+                        tag: 'event-' + event.id
+                    });
+                });
+            }
+            
+            lastNotificationCheck = data.last_check || new Date().toISOString();
+        } catch (e) {
+            console.error('[DEBUG] Notification poll failed:', e);
+        }
+    }, 30000); // Check every 30 seconds
+}
+
+// ===== TEST SINGLE EMAIL MODAL =====
+function openTestSingleEmailModal() {
+    const modal = document.getElementById('test-single-email-modal');
+    const password = document.getElementById('test-email-password');
+    const error = document.getElementById('test-email-error');
+    
+    if (modal) modal.classList.add('show');
+    if (password) password.value = '';
+    if (error) error.classList.remove('show');
+}
+
+function closeTestSingleEmailModal() {
+    const modal = document.getElementById('test-single-email-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+async function submitTestSingleEmail() {
+    const email = document.getElementById('test-email-select').value;
+    const password = document.getElementById('test-email-password').value;
+    const error = document.getElementById('test-email-error');
+    
+    if (!password) {
+        error.textContent = 'Please enter password';
+        error.classList.add('show');
+        return;
+    }
+    
+    console.log('[DEBUG] Testing single email to:', email);
+    
+    try {
+        const response = await fetch('/api/test-single-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const result = await response.json();
+        
+        if (response.status === 401) {
+            error.textContent = 'Invalid password';
+            error.classList.add('show');
+            return;
+        }
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            closeTestSingleEmailModal();
+        } else {
+            error.textContent = result.message || 'Failed to send';
+            error.classList.add('show');
+        }
+    } catch (e) {
+        console.error('[DEBUG] Test email error:', e);
+        showToast('Network error', 'error');
+    }
+}
+
+// ===== LIVE EVENTS SEARCH =====
+function searchLiveEvents() {
+    const query = document.getElementById('live-event-search').value.toLowerCase().trim();
+    const events = document.querySelectorAll('#live-events-list .event-card');
+    const clearBtn = document.getElementById('live-search-clear-btn');
+    const resultsInfo = document.getElementById('live-search-results-info');
+    
+    clearBtn.style.display = query ? 'flex' : 'none';
+    
+    let matchCount = 0;
+    events.forEach(event => {
+        const title = event.dataset.title || '';
+        if (title.includes(query) || !query) {
+            event.style.display = 'block';
+            matchCount++;
+        } else {
+            event.style.display = 'none';
+        }
+    });
+    
+    if (query && events.length > 0) {
+        resultsInfo.style.display = 'block';
+        resultsInfo.textContent = `Found ${matchCount} event(s) matching "${query}"`;
+    } else {
+        resultsInfo.style.display = 'none';
+    }
+    
+    console.log('[DEBUG] Live event search:', query, '- Found:', matchCount);
+}
+
+function clearLiveEventSearch() {
+    document.getElementById('live-event-search').value = '';
+    searchLiveEvents();
+}
+
+// ===== TEST NEW EVENT MODAL (Real Email Test) =====
+function openTestNewEventModal() {
+    const modal = document.getElementById('test-new-event-modal');
+    const password = document.getElementById('test-new-event-password');
+    const error = document.getElementById('test-new-event-error');
+    
+    if (modal) modal.classList.add('show');
+    if (password) password.value = '';
+    if (error) error.classList.remove('show');
+    
+    console.log('[DEBUG] Test new event modal opened');
+}
+
+function closeTestNewEventModal() {
+    const modal = document.getElementById('test-new-event-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+async function submitTestNewEvent() {
+    const password = document.getElementById('test-new-event-password').value;
+    const error = document.getElementById('test-new-event-error');
+    
+    if (!password) {
+        error.textContent = 'Please enter admin password';
+        error.classList.add('show');
+        return;
+    }
+    
+    console.log('[DEBUG] Triggering test new event notification...');
+    
+    try {
+        const response = await fetch('/api/test-new-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        
+        const result = await response.json();
+        
+        if (response.status === 401) {
+            error.textContent = 'Invalid password';
+            error.classList.add('show');
+            return;
+        }
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            closeTestNewEventModal();
+            // Refresh page after a short delay to see the changes
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            error.textContent = result.message || 'Failed to trigger test';
+            error.classList.add('show');
+        }
+    } catch (e) {
+        console.error('[DEBUG] Test new event error:', e);
+        showToast('Network error', 'error');
+    }
+}
+

@@ -1,0 +1,38 @@
+[
+  {
+    "timestamp": "2026-01-30T13:55:15.409589+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "message": "Email credentials not configured",
+    "level": "error"
+  },
+  {
+    "timestamp": "2026-01-30T13:55:15.408457+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "message": "\ud83d\udc93 Sending scheduled heartbeat...",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-30T13:55:15.399334+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "message": "\u2728 No new events found",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-30T13:55:15.398396+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "message": "\ud83d\udce1 Fetched 6 events from API",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-30T13:55:13.361896+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "message": "\ud83d\udd0d Starting event check...",
+    "level": "info"
+  },
+  {
+    "timestamp": "2026-01-30T13:55:13.360602+00:00",
+    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "message": "\ud83d\ude80 Background checker started",
+    "level": "success"
+  }
+]

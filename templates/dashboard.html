@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ theme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,8 +8,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <!-- Chart.js for statistics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
+<body class="theme-{{ theme }}">
     <!-- Header -->
     <header class="header">
         <div class="header-content">
@@ -21,6 +23,10 @@
                 </div>
             </div>
             <div class="header-status">
+                <button class="header-btn" onclick="openSettingsModal()">
+                    <i class="bi bi-gear"></i>
+                    Settings
+                </button>
                 <div class="security-badge">
                     <i class="bi bi-shield-check"></i>
                     Secured
@@ -72,6 +78,27 @@
                     <div class="stat-icon cyan"><i class="bi bi-clock-history"></i></div>
                     <div class="stat-value">{{ uptime_str }}</div>
                     <div class="stat-label">Uptime</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Statistics Chart -->
+        <section class="section-gap">
+            <div class="card chart-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="bi bi-bar-chart-line"></i>
+                        Event Statistics
+                    </div>
+                    <div class="chart-controls">
+                        <button class="btn btn-sm btn-outline active" onclick="switchChartView('daily')" id="chart-daily-btn">Daily</button>
+                        <button class="btn btn-sm btn-outline" onclick="switchChartView('hourly')" id="chart-hourly-btn">Hourly</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="statsChart"></canvas>
+                    </div>
                 </div>
             </div>
         </section>
@@ -165,6 +192,10 @@
                     <i class="bi bi-file-earmark-bar-graph"></i>
                     <span>Send Daily Summary</span>
                 </button>
+                <button class="action-btn" onclick="openTestSingleEmailModal()">
+                    <i class="bi bi-envelope-at"></i>
+                    <span>Test Single Email</span>
+                </button>
                 <button class="action-btn" onclick="secureAction('/api/test-all-emails', 'Bulk test completed!')">
                     <i class="bi bi-envelope-paper-heart"></i>
                     <span>Test All Emails</span>
@@ -173,6 +204,32 @@
                     <i class="bi bi-hdd-network"></i>
                     <span>Test API Connection</span>
                 </button>
+            </div>
+        </section>
+
+        <!-- Export Section -->
+        <section class="section-gap">
+            <div class="section-header">
+                <h2 class="section-title"><i class="bi bi-download"></i> Export Data</h2>
+                <p class="section-desc">Download logs and event data</p>
+            </div>
+            <div class="export-grid">
+                <a href="/api/export-logs?format=json" class="export-btn">
+                    <i class="bi bi-filetype-json"></i>
+                    <span>Export Logs (JSON)</span>
+                </a>
+                <a href="/api/export-logs?format=csv" class="export-btn">
+                    <i class="bi bi-filetype-csv"></i>
+                    <span>Export Logs (CSV)</span>
+                </a>
+                <a href="/api/export-events?format=json" class="export-btn">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>Export Events (JSON)</span>
+                </a>
+                <a href="/api/export-events?format=csv" class="export-btn">
+                    <i class="bi bi-file-spreadsheet"></i>
+                    <span>Export Events (CSV)</span>
+                </a>
             </div>
         </section>
 
@@ -364,23 +421,41 @@
                             <i class="bi bi-broadcast"></i>
                             Live API Events
                         </div>
-                        <span class="badge info" id="live-events-count">{{ live_events|length }} events</span>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <button class="btn btn-sm btn-outline" onclick="openTestNewEventModal()" title="Remove latest event from DB and trigger real notification">
+                                <i class="bi bi-lightning-charge"></i> Test Real Email
+                            </button>
+                            <span class="badge info" id="live-events-count">{{ live_events|length }} events</span>
+                        </div>
                     </div>
                     <div class="card-body">
-                        <div class="events-list" id="live-events-list" style="max-height: 350px; overflow-y: auto;">
+                        <!-- Live Events Search -->
+                        <div class="search-box" style="margin-bottom: 1rem;">
+                            <i class="bi bi-search"></i>
+                            <input type="text" id="live-event-search" placeholder="Search live events..." onkeyup="searchLiveEvents()">
+                            <button class="search-clear" onclick="clearLiveEventSearch()" id="live-search-clear-btn" style="display: none;">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <div class="search-results-info" id="live-search-results-info" style="display: none; margin-bottom: 0.75rem;"></div>
+                        <div class="event-cards-grid" id="live-events-list" style="max-height: 450px; overflow-y: auto;">
                             {% for event in live_events %}
-                            <div class="event-item">
-                                <div class="event-icon"><i class="bi bi-calendar-event"></i></div>
-                                <div class="event-content">
-                                    <div class="event-title">{{ event.title[:60] }}{% if event.title|length > 60 %}...{% endif %}</div>
-                                    <div class="event-meta">
-                                        <span><i class="bi bi-hash"></i> ID: {{ event.id }}</span>
-                                        <span><i class="bi bi-calendar3"></i> {{ event.date_posted[:10] if event.date_posted else 'N/A' }}</span>
-                                    </div>
+                            <div class="event-card" data-title="{{ event.title|lower }}">
+                                <div class="event-card-image">
+                                    <i class="bi bi-shop-window"></i>
+                                    <span class="event-id-badge">#{{ event.id }}</span>
                                 </div>
-                                <a href="{{ event.link }}" target="_blank" class="event-link-btn">
-                                    <i class="bi bi-box-arrow-up-right"></i>
-                                </a>
+                                <div class="event-card-body">
+                                    <div class="event-card-title">{{ event.title }}</div>
+                                    <div class="event-card-meta">
+                                        <i class="bi bi-calendar3"></i>
+                                        {{ event.date_posted[:10] if event.date_posted else 'N/A' }}
+                                    </div>
+                                    <a href="{{ event.link }}" target="_blank" class="event-card-link">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                        View Event
+                                    </a>
+                                </div>
                             </div>
                             {% else %}
                             <div class="empty-state">
@@ -402,9 +477,17 @@
                         <span class="badge success">{{ seen_count }} total</span>
                     </div>
                     <div class="card-body">
-                        <div class="events-list" style="max-height: 350px; overflow-y: auto;">
+                        <!-- Event Search -->
+                        <div class="search-box">
+                            <i class="bi bi-search"></i>
+                            <input type="text" id="event-search" placeholder="Search events..." onkeyup="searchEvents()">
+                            <button class="search-clear" onclick="clearEventSearch()" id="search-clear-btn" style="display: none;">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <div class="events-list" style="max-height: 350px; overflow-y: auto;" id="past-events-list">
                             {% for event in recent_events %}
-                            <div class="event-item past">
+                            <div class="event-item past" data-title="{{ event.title|lower }}">
                                 <div class="event-icon"><i class="bi bi-check2-circle"></i></div>
                                 <div class="event-content">
                                     <div class="event-title">{{ event.title[:60] }}{% if event.title|length > 60 %}...{% endif %}</div>
@@ -424,6 +507,7 @@
                             </div>
                             {% endfor %}
                         </div>
+                        <div class="search-results-info" id="search-results-info" style="display: none;"></div>
                     </div>
                 </div>
             </div>
@@ -482,7 +566,7 @@
                                 <div class="log-dot {{ log.level }}"></div>
                                 <div class="log-content">
                                     <div class="log-message">{{ log.message }}</div>
-                                    <div class="log-time">{{ log.timestamp[:16] }}</div>
+                                    <div class="log-time">{{ log.timestamp_formatted or log.timestamp[:16] }}</div>
                                 </div>
                             </div>
                             {% else %}
@@ -542,6 +626,168 @@
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <div class="modal-icon"><i class="bi bi-gear"></i></div>
+                <h3 class="modal-title">Dashboard Settings</h3>
+                <p class="modal-desc">Configure monitoring preferences</p>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4 class="settings-section-title"><i class="bi bi-heart-pulse"></i> Heartbeat Monitor</h4>
+                    <p class="settings-desc">Receive periodic emails confirming the bot is running (💓 Bot Running OK)</p>
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <span class="settings-label">Send Heartbeat Emails</span>
+                            <span class="settings-hint">Every {{ config.heartbeat_hours }} hours to {{ mask_email(config.heartbeat_email) }}</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-heartbeat" {% if config.heartbeat_enabled %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title"><i class="bi bi-calendar-check"></i> Daily Summary</h4>
+                    <p class="settings-desc">Receive a daily summary email with all tracked events</p>
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <span class="settings-label">Send Daily Summary</span>
+                            <span class="settings-hint">Every day at {{ "%02d:00"|format(config.daily_summary_hour) }} UTC</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-daily-summary" {% if config.daily_summary_enabled %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title"><i class="bi bi-power"></i> Event Tracker</h4>
+                    <p class="settings-desc">Main event tracking functionality</p>
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <span class="settings-label">Tracker Enabled</span>
+                            <span class="settings-hint">Checks every {{ config.check_interval_minutes }} minutes</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-tracker" {% if config.tracker_enabled %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title"><i class="bi bi-palette"></i> Appearance</h4>
+                    <p class="settings-desc">Customize the dashboard look and feel</p>
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <span class="settings-label">Dark Mode</span>
+                            <span class="settings-hint">Toggle between dark and light theme</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-theme" {% if theme == 'dark' %}checked{% endif %} onchange="toggleTheme()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title"><i class="bi bi-bell"></i> Browser Notifications</h4>
+                    <p class="settings-desc">Get notified when new events are found (even when tab is in background)</p>
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <span class="settings-label">Enable Notifications</span>
+                            <span class="settings-hint" id="notification-status">{% if notifications_enabled %}Enabled{% else %}Click to enable{% endif %}</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-notifications" {% if notifications_enabled %}checked{% endif %} onchange="toggleNotifications()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-note">
+                    <i class="bi bi-info-circle"></i>
+                    <span>Changes require admin password. Timing values can be changed via environment variables.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeSettingsModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Single Email Modal -->
+    <div class="modal-overlay" id="test-single-email-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-icon"><i class="bi bi-envelope-at"></i></div>
+                <h3 class="modal-title">Test Single Recipient</h3>
+                <p class="modal-desc">Send a test email to one recipient</p>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="test-email-select">Select Recipient</label>
+                    <select id="test-email-select" class="input-select">
+                        {% for email in all_recipients %}
+                        <option value="{{ email }}">{{ mask_email(email) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="test-email-password">Admin Password</label>
+                    <input type="password" id="test-email-password" placeholder="Enter password" onkeypress="if(event.key === 'Enter') submitTestSingleEmail()">
+                </div>
+                <div class="error-text" id="test-email-error">Error message here</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeTestSingleEmailModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitTestSingleEmail()">Send Test Email</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test New Event Modal (Real Email Test) -->
+    <div class="modal-overlay" id="test-new-event-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);"><i class="bi bi-lightning-charge"></i></div>
+                <h3 class="modal-title">Test Real Event Notification</h3>
+                <p class="modal-desc">This will remove the latest event from the database and trigger a real "New Event Found" email to all recipients</p>
+            </div>
+            <div class="modal-body">
+                <div class="warning-box" style="background: var(--warning-bg); border: 1px solid var(--warning); border-radius: 8px; padding: 12px; margin-bottom: 1rem;">
+                    <div style="display: flex; align-items: flex-start; gap: 10px;">
+                        <i class="bi bi-exclamation-triangle" style="color: var(--warning); font-size: 1.25rem;"></i>
+                        <div>
+                            <strong style="color: var(--warning);">Warning:</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 4px 0 0 0;">
+                                This action will temporarily remove the most recent event from your database.
+                                On the next API check, it will be detected as "new" and a real notification email will be sent to ALL enabled recipients.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="test-new-event-password">Admin Password</label>
+                    <input type="password" id="test-new-event-password" placeholder="Enter password to confirm" onkeypress="if(event.key === 'Enter') submitTestNewEvent()">
+                </div>
+                <div class="error-text" id="test-new-event-error">Error message here</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeTestNewEventModal()">Cancel</button>
+                <button class="btn btn-primary" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);" onclick="submitTestNewEvent()">
+                    <i class="bi bi-lightning-charge"></i> Trigger Test
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
@@ -554,6 +800,10 @@
         nextHeartbeatSeconds = {{ next_heartbeat_seconds }};
         // Immediately update timers with the values
         updateTimers();
+        
+        // Initialize chart and notifications
+        initStatsChart();
+        checkNotificationPermission();
     </script>
 </body>
 </html>

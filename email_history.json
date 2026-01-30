@@ -1,0 +1,38 @@
+[
+  {
+    "timestamp": "2026-01-30T13:26:11.088070+00:00",
+    "timestamp_formatted": "Jan 30 at 01:26 PM",
+    "recipient": "steevenparubrub@gmail.com",
+    "recipient_masked": "st***ub@gmail.com",
+    "subject": "\ud83d\udc93 Bot Running OK - Check #1 | 13:26 UTC",
+    "success": false,
+    "error": "Credentials not configured"
+  },
+  {
+    "timestamp": "2026-01-30T13:27:15.583012+00:00",
+    "timestamp_formatted": "Jan 30 at 01:27 PM",
+    "recipient": "steevenparubrub@gmail.com",
+    "recipient_masked": "st***ub@gmail.com",
+    "subject": "\ud83d\udc93 Bot Running OK - Check #1 | 13:27 UTC",
+    "success": false,
+    "error": "Credentials not configured"
+  },
+  {
+    "timestamp": "2026-01-30T13:41:02.325003+00:00",
+    "timestamp_formatted": "Jan 30 at 01:41 PM",
+    "recipient": "steevenparubrub@gmail.com",
+    "recipient_masked": "st***ub@gmail.com",
+    "subject": "\ud83d\udc93 Bot Running OK - Check #1 | 13:41 UTC",
+    "success": false,
+    "error": "Credentials not configured"
+  },
+  {
+    "timestamp": "2026-01-30T13:55:15.410364+00:00",
+    "timestamp_formatted": "Jan 30 at 01:55 PM",
+    "recipient": "steevenparubrub@gmail.com",
+    "recipient_masked": "st***ub@gmail.com",
+    "subject": "\ud83d\udc93 Bot Running OK - Check #1 | 13:55 UTC",
+    "success": false,
+    "error": "Credentials not configured"
+  }
+]
