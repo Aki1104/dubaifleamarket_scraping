@@ -21,6 +21,7 @@ import os
 import threading
 import requests
 import smtplib
+import socket
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import html
@@ -559,8 +560,8 @@ def fetch_events():
         log_activity(f"Failed to fetch events: {e}", "error")
         return None
 
-def send_email(subject, body, to_email=None):
-    """Send email notification."""
+def send_email(subject, body, to_email=None, max_retries=3):
+    """Send email notification with retry logic for transient failures."""
     global CONFIG
     if not MY_EMAIL or not MY_PASSWORD:
         log_activity("Email credentials not configured", "error")
@@ -577,33 +578,57 @@ def send_email(subject, body, to_email=None):
         add_to_email_history(recipient, subject, False, 'Invalid email format')
         return False
     
-    try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = sanitize_string(subject, 100)
-        msg['From'] = MY_EMAIL
-        msg['To'] = recipient
-        
-        text_part = MIMEText(body, 'plain')
-        msg.attach(text_part)
-        
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(MY_EMAIL, MY_PASSWORD)
-            server.sendmail(MY_EMAIL, recipient, msg.as_string())
-        
-        CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
-        # Record email sent statistic
-        record_stat('emails_sent', 1)
-        log_activity(f"📧 Email sent to {recipient[:15]}...", "success")
-        console_log(f"✅ Email delivered successfully to {mask_email(recipient)}", "success")
-        add_to_email_history(recipient, subject, True)
-        return True
-    except Exception as e:
-        error_msg = str(e)[:50]
-        log_activity(f"Failed to send email: {error_msg}", "error")
-        console_log(f"❌ Email delivery failed: {error_msg}", "error")
-        add_to_email_history(recipient, subject, False, error_msg)
-        return False
+    # Prepare message once
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = sanitize_string(subject, 100)
+    msg['From'] = MY_EMAIL
+    msg['To'] = recipient
+    text_part = MIMEText(body, 'plain')
+    msg.attach(text_part)
+    
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            console_log(f"📧 Sending to {mask_email(recipient)} (attempt {attempt}/{max_retries})...", "debug")
+            
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                server.starttls()
+                server.login(MY_EMAIL, MY_PASSWORD)
+                server.sendmail(MY_EMAIL, recipient, msg.as_string())
+            
+            CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
+            # Record email sent statistic
+            record_stat('emails_sent', 1)
+            log_activity(f"📧 Email sent to {recipient[:15]}...", "success")
+            console_log(f"✅ Email delivered successfully to {mask_email(recipient)}", "success")
+            add_to_email_history(recipient, subject, True)
+            return True
+            
+        except (OSError, socket.error) as e:
+            # Network errors - retry
+            last_error = str(e)[:50]
+            console_log(f"⚠️ Network error (attempt {attempt}): {last_error}", "warning")
+            if attempt < max_retries:
+                time.sleep(5 * attempt)  # Exponential backoff: 5s, 10s, 15s
+                continue
+        except smtplib.SMTPException as e:
+            # SMTP errors - may or may not be retryable
+            last_error = str(e)[:50]
+            console_log(f"⚠️ SMTP error (attempt {attempt}): {last_error}", "warning")
+            if attempt < max_retries:
+                time.sleep(3)
+                continue
+        except Exception as e:
+            # Other errors - don't retry
+            last_error = str(e)[:50]
+            console_log(f"❌ Email error: {last_error}", "error")
+            break
+    
+    # All retries failed
+    log_activity(f"Failed to send email after {max_retries} attempts: {last_error}", "error")
+    console_log(f"❌ Email delivery failed after {max_retries} retries: {last_error}", "error")
+    add_to_email_history(recipient, subject, False, f"Failed after {max_retries} retries: {last_error}")
+    return False
 
 def send_new_event_email(events):
     """Send new event notification to enabled recipients."""
