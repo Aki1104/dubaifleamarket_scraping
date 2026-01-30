@@ -587,10 +587,10 @@ function updateDiagnostics(diag) {
     if (data.email_provider) {
         const emailProvider = document.getElementById('diag-email-provider');
         if (emailProvider) {
-            const primary = data.email_provider.primary || 'Unknown';
-            const fallback = data.email_provider.gmail_configured ? ' (Gmail backup)' : '';
-            emailProvider.textContent = primary + (primary === 'Resend' ? fallback : '');
-            emailProvider.className = 'diag-value ' + (primary === 'Resend' ? 'good' : 'warning');
+            const configured = data.email_provider.gmail_configured;
+            const ipv4 = data.email_provider.ipv4_forced ? ' (IPv4)' : '';
+            emailProvider.textContent = configured ? 'Gmail SMTP' + ipv4 : 'Not Configured';
+            emailProvider.className = 'diag-value ' + (configured ? 'good' : 'error');
         }
     }
     

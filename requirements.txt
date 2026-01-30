@@ -29,11 +29,9 @@
 #   (Used to fetch event data from dubai-fleamarket.com)
 # - Flask: Web framework for the admin dashboard
 # - gunicorn: Production web server for Render deployment
-# - resend: Modern email API (replaces Gmail SMTP)
 #
 # =============================================================================
 
 requests==2.31.0
 Flask>=2.3.0
 gunicorn>=21.0.0
-resend>=0.6.0

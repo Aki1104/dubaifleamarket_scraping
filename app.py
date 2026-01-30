@@ -30,14 +30,6 @@ import secrets
 import time
 import re
 
-# Resend for reliable email delivery
-try:
-    import resend
-    RESEND_AVAILABLE = True
-except ImportError:
-    RESEND_AVAILABLE = False
-    print("[WARNING] Resend not installed, using Gmail SMTP only")
-
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
@@ -202,19 +194,6 @@ TO_EMAIL = os.environ.get('TO_EMAIL', '')
 SMTP_USE_IPV4 = os.environ.get('SMTP_USE_IPV4', 'true').lower() == 'true'
 
 # Note: get_smtp_connection() function is defined after console_log() below
-
-# Resend API (primary email provider)
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
-RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', 'Dubai Flea Market Bot <onboarding@resend.dev>')
-
-# Initialize Resend if available
-if RESEND_AVAILABLE and RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY
-    print(f"[RESEND] Initialized with API key (using: {RESEND_FROM_EMAIL})")
-elif RESEND_AVAILABLE:
-    print("[RESEND] Library available but no API key set")
-else:
-    print("[RESEND] Library not available, using Gmail SMTP only")
 
 CONFIG = {
     'check_interval_minutes': int(os.environ.get('CHECK_INTERVAL', '15')),
@@ -727,51 +706,13 @@ def fetch_events():
         log_activity(f"Failed to fetch events: {e}", "error")
         return None
 
-def send_email_resend(subject, body, recipient):
-    """Send email via Resend API. Returns True on success, False on failure."""
-    global CONFIG
-    
-    if not RESEND_AVAILABLE or not RESEND_API_KEY:
-        return False
-    
-    try:
-        params = {
-            "from": RESEND_FROM_EMAIL,
-            "to": [recipient],
-            "subject": sanitize_string(subject, 100),
-            "text": body
-        }
-        
-        email_response = resend.Emails.send(params)
-        
-        if email_response and email_response.get('id'):
-            console_log(f"✅ Resend email sent! ID: {email_response['id'][:20]}...", "success")
-            CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
-            record_stat('emails_sent', 1)
-            add_to_email_history(recipient, subject, True, f"Resend ID: {email_response['id'][:12]}")
-            return True
-        else:
-            console_log(f"⚠️ Resend returned unexpected response", "warning")
-            return False
-            
-    except Exception as e:
-        console_log(f"⚠️ Resend error: {str(e)[:50]}", "warning")
-        return False
-
 def send_email_direct(subject, body, recipient):
-    """Direct email send without queueing. Tries Resend first, then Gmail SMTP."""
+    """Direct email send without queueing. Uses Gmail SMTP."""
     global CONFIG
     
     if not recipient or not validate_email(recipient):
         return False
     
-    # Try Resend first (more reliable)
-    if RESEND_AVAILABLE and RESEND_API_KEY:
-        if send_email_resend(subject, body, recipient):
-            return True
-        console_log("⚠️ Resend failed, falling back to Gmail SMTP...", "warning")
-    
-    # Fallback to Gmail SMTP
     if not MY_EMAIL or not MY_PASSWORD:
         console_log("❌ Gmail SMTP not configured, cannot send email", "error")
         return False
@@ -815,28 +756,13 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
         add_to_email_history(recipient, subject, False, 'Invalid email format')
         return False
     
-    # Try Resend first (more reliable API-based approach)
-    if RESEND_AVAILABLE and RESEND_API_KEY:
-        console_log(f"📧 Sending via Resend to {mask_email(recipient)}...", "debug")
-        if send_email_resend(subject, body, recipient):
-            log_activity(f"📧 Email sent via Resend to {recipient[:15]}...", "success")
-            return True
-        console_log("⚠️ Resend failed, trying Gmail SMTP...", "warning")
-    
-    # Check Gmail credentials for fallback
+    # Check Gmail credentials
     if not MY_EMAIL or not MY_PASSWORD:
-        # No Gmail fallback available
-        if RESEND_AVAILABLE and RESEND_API_KEY:
-            # Resend failed and no Gmail - queue for later
-            console_log(f"📬 Queueing email for deferred retry: {mask_email(recipient)}", "info")
-            add_to_email_queue(subject, body, recipient, priority)
-            add_to_email_history(recipient, subject, False, "Resend failed, queued for retry")
-            return False
         log_activity("Email credentials not configured", "error")
         add_to_email_history(recipient, subject, False, 'Credentials not configured')
         return False
     
-    # Gmail SMTP fallback with retry logic
+    # Gmail SMTP with retry logic
     msg = MIMEMultipart('alternative')
     msg['Subject'] = sanitize_string(subject, 100)
     msg['From'] = MY_EMAIL
@@ -1395,11 +1321,10 @@ def api_diagnostics():
             'enabled_recipients': len(get_recipients())
         },
         'email_provider': {
-            'primary': 'Resend' if (RESEND_AVAILABLE and RESEND_API_KEY) else 'Gmail SMTP',
-            'resend_available': RESEND_AVAILABLE,
-            'resend_configured': bool(RESEND_API_KEY),
+            'primary': 'Gmail SMTP',
             'gmail_configured': bool(MY_EMAIL and MY_PASSWORD),
-            'from_email': RESEND_FROM_EMAIL if (RESEND_AVAILABLE and RESEND_API_KEY) else MY_EMAIL
+            'from_email': MY_EMAIL,
+            'ipv4_forced': SMTP_USE_IPV4
         },
         'email_queue': {
             'pending_count': len(EMAIL_QUEUE),
