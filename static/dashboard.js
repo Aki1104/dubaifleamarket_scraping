@@ -452,6 +452,11 @@ async function updateConsoleAndDiagnostics() {
         // Update diagnostics
         updateDiagnostics(data.diagnostics);
         
+        // Update check history cards
+        if (data.check_history) {
+            updateCheckHistory(data.check_history);
+        }
+        
     } catch (e) {
         console.log('Failed to update console/diagnostics');
     }
@@ -560,6 +565,71 @@ function updateDiagnostics(diag) {
             statusBadge.className = 'badge warning';
         }
     }
+}
+
+// Track last check count to avoid unnecessary updates
+var lastCheckCount = 0;
+
+function updateCheckHistory(history) {
+    if (!history || history.length === 0) return;
+    
+    // Only update if there are new checks
+    if (history.length === lastCheckCount) return;
+    lastCheckCount = history.length;
+    
+    const container = document.getElementById('check-history-container');
+    if (!container) return;
+    
+    // Build the check cards HTML
+    const cardsHtml = history.slice(0, 12).map(check => {
+        let cardClass = 'check-card';
+        if (check.status === 'error') {
+            cardClass += ' error';
+        } else if (check.new_events_found > 0) {
+            cardClass += ' has-new';
+        } else {
+            cardClass += ' no-new';
+        }
+        
+        let resultHtml = '';
+        if (check.status === 'error') {
+            resultHtml = `
+                <div class="check-result error">
+                    <i class="bi bi-x-circle-fill"></i>
+                    <span>API Error</span>
+                </div>`;
+        } else if (check.new_events_found > 0) {
+            resultHtml = `
+                <div class="check-result success">
+                    <i class="bi bi-stars"></i>
+                    <span>${check.new_events_found} New Event${check.new_events_found > 1 ? 's' : ''}!</span>
+                </div>
+                ${check.emails_sent ? '<div class="check-email-sent"><i class="bi bi-envelope-check"></i> Email Sent</div>' : ''}`;
+        } else {
+            resultHtml = `
+                <div class="check-result neutral">
+                    <i class="bi bi-check-circle"></i>
+                    <span>No New Events</span>
+                </div>`;
+        }
+        
+        return `
+            <div class="${cardClass}">
+                <div class="check-card-header">
+                    <span class="check-number">#${check.check_number}</span>
+                    <span class="check-time">${check.time_display}</span>
+                </div>
+                <div class="check-card-body">
+                    ${resultHtml}
+                </div>
+                <div class="check-card-footer">
+                    <span class="check-fetched"><i class="bi bi-cloud-download"></i> ${check.events_fetched} fetched</span>
+                    <span class="check-date">${check.date_display}</span>
+                </div>
+            </div>`;
+    }).join('');
+    
+    container.innerHTML = `<div class="check-history-grid" id="check-history-grid">${cardsHtml}</div>`;
 }
 
 function formatBytes(bytes) {

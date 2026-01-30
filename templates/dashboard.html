@@ -124,6 +124,60 @@
             </div>
         </section>
 
+        <!-- Check History Cards -->
+        <section class="section-gap">
+            <div class="section-header">
+                <h2 class="section-title"><i class="bi bi-journal-check"></i> Event Check History</h2>
+                <p class="section-desc">Results from each 15-minute check cycle</p>
+            </div>
+            <div class="check-history-container" id="check-history-container">
+                {% if check_history %}
+                <div class="check-history-grid" id="check-history-grid">
+                    {% for check in check_history %}
+                    <div class="check-card {% if check.new_events_found > 0 %}has-new{% elif check.status == 'error' %}error{% else %}no-new{% endif %}">
+                        <div class="check-card-header">
+                            <span class="check-number">#{{ check.check_number }}</span>
+                            <span class="check-time">{{ check.time_display }}</span>
+                        </div>
+                        <div class="check-card-body">
+                            {% if check.status == 'error' %}
+                            <div class="check-result error">
+                                <i class="bi bi-x-circle-fill"></i>
+                                <span>API Error</span>
+                            </div>
+                            {% elif check.new_events_found > 0 %}
+                            <div class="check-result success">
+                                <i class="bi bi-stars"></i>
+                                <span>{{ check.new_events_found }} New Event{{ 's' if check.new_events_found > 1 else '' }}!</span>
+                            </div>
+                            {% if check.emails_sent %}
+                            <div class="check-email-sent">
+                                <i class="bi bi-envelope-check"></i> Email Sent
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <div class="check-result neutral">
+                                <i class="bi bi-check-circle"></i>
+                                <span>No New Events</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="check-card-footer">
+                            <span class="check-fetched"><i class="bi bi-cloud-download"></i> {{ check.events_fetched }} fetched</span>
+                            <span class="check-date">{{ check.date_display }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="check-history-empty">
+                    <i class="bi bi-hourglass-split"></i>
+                    <p>No check history yet. Waiting for first check cycle...</p>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
         <!-- Schedule Information -->
         <section class="section-gap">
             <div class="card schedule-card">

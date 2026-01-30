@@ -207,6 +207,10 @@ CONFIG = {
 ACTIVITY_LOGS = []
 MAX_LOGS = 100
 
+# ===== CHECK HISTORY - Card-based check results =====
+CHECK_HISTORY = []
+MAX_CHECK_HISTORY = 50  # Keep last 50 check results
+
 # ===== SYSTEM CONSOLE - Terminal-like logging =====
 SYSTEM_CONSOLE = []
 MAX_CONSOLE_LOGS = 200
@@ -767,6 +771,18 @@ def check_for_events():
                 'first_seen': datetime.now(timezone.utc).strftime('%b %d, %Y at %I:%M %p')
             })
     
+    # Record check history
+    check_result = {
+        'check_number': CONFIG['total_checks'],
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'time_display': datetime.now(timezone.utc).strftime('%I:%M %p'),
+        'date_display': datetime.now(timezone.utc).strftime('%b %d'),
+        'events_fetched': len(events) if events else 0,
+        'new_events_found': len(new_events),
+        'status': 'success' if events else 'error',
+        'new_event_titles': [e.get('title', 'Unknown')[:50] for e in new_events[:3]]  # First 3 titles
+    }
+    
     if new_events:
         CONFIG['total_new_events'] += len(new_events)
         # Record new events statistic
@@ -780,9 +796,16 @@ def check_for_events():
         console_log("💾 Saving updated database...", "info")
         save_seen_events(seen_data)
         console_log("   └─ Database saved successfully", "debug")
+        check_result['emails_sent'] = True
     else:
         console_log("✨ No new events found - all events already seen", "info")
         log_activity("✨ No new events found")
+        check_result['emails_sent'] = False
+    
+    # Add to check history
+    CHECK_HISTORY.insert(0, check_result)
+    if len(CHECK_HISTORY) > MAX_CHECK_HISTORY:
+        CHECK_HISTORY[:] = CHECK_HISTORY[:MAX_CHECK_HISTORY]
     
     status = load_status()
     status['total_checks'] = CONFIG['total_checks']
@@ -977,7 +1000,8 @@ def dashboard():
         current_time=now.strftime('%B %d, %Y at %I:%M %p UTC'),
         email_history=load_email_history()[-20:][::-1],
         theme=theme_settings.get('theme', 'dark'),
-        notifications_enabled=theme_settings.get('notifications_enabled', False)
+        notifications_enabled=theme_settings.get('notifications_enabled', False),
+        check_history=CHECK_HISTORY[:12]  # Show last 12 checks on initial load
     )
 
 @app.route('/health')
@@ -1040,7 +1064,17 @@ def api_console():
     """API endpoint for system console logs."""
     return jsonify({
         'console': SYSTEM_CONSOLE[:100],
-        'diagnostics': API_DIAGNOSTICS
+        'diagnostics': API_DIAGNOSTICS,
+        'check_history': CHECK_HISTORY[:20]  # Include recent check history
+    })
+
+@app.route('/api/check-history')
+@rate_limit
+def api_check_history():
+    """API endpoint for check history cards."""
+    return jsonify({
+        'history': CHECK_HISTORY[:50],
+        'total_checks': CONFIG['total_checks']
     })
 
 @app.route('/api/diagnostics')
