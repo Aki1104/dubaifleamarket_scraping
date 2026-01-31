@@ -375,6 +375,21 @@ body {
     font-weight: 500;
 }
 
+/* Telegram grid - 4 columns on desktop */
+.telegram-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 900px) {
+    .telegram-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 500px) {
+    .telegram-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 .toggle-row {
     display: flex;
     align-items: center;

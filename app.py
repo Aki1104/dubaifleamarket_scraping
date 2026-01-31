@@ -208,6 +208,12 @@ MY_EMAIL = os.environ.get('MY_EMAIL', '')
 MY_PASSWORD = os.environ.get('MY_PASSWORD', '')
 TO_EMAIL = os.environ.get('TO_EMAIL', '')
 
+# Self-ping to prevent Render free tier from spinning down
+# Render spins down after 15 min of no traffic - this keeps it alive
+RENDER_URL = os.environ.get('RENDER_EXTERNAL_URL', '')  # Auto-set by Render
+SELF_PING_ENABLED = os.environ.get('SELF_PING_ENABLED', 'true').lower() == 'true'
+SELF_PING_INTERVAL = 10  # Ping every 10 minutes (less than 15 min timeout)
+
 # Force IPv4 for SMTP connections (fixes "Network is unreachable" on some cloud hosts)
 # This is a common issue on Render, Heroku, etc. where IPv6 is attempted but not available
 SMTP_USE_IPV4 = os.environ.get('SMTP_USE_IPV4', 'true').lower() == 'true'
@@ -935,15 +941,27 @@ def send_telegram_new_events(events):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_IDS:
         return False
     
-    message = f"🎉 <b>{len(events)} New Dubai Flea Market Event(s)!</b>\n\n"
+    now = datetime.now(timezone.utc)
     
-    for event in events:
-        message += f"📍 <b>{event['title']}</b>\n"
-        message += f"🔗 {event['link']}\n"
-        message += f"📅 Posted: {event['date_posted']}\n"
-        message += "─" * 30 + "\n\n"
+    message = f"""🚨 <b>NEW EVENT ALERT!</b> 🚨
+
+🎯 <b>{len(events)} New Dubai Flea Market Event{'s' if len(events) > 1 else ''} Found!</b>
+━━━━━━━━━━━━━━━━━━━━━━
+"""
     
-    message += "🤖 Dubai Flea Market Tracker"
+    for i, event in enumerate(events, 1):
+        message += f"\n📍 <b>Event {i}:</b>\n"
+        message += f"   📌 {event['title']}\n"
+        message += f"   🔗 <a href=\"{event['link']}\">View Event →</a>\n"
+        message += f"   📅 Posted: {event['date_posted']}\n"
+        if i < len(events):
+            message += "\n   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─\n"
+    
+    message += f"""\n━━━━━━━━━━━━━━━━━━━━━━
+⏰ Detected: {now.strftime('%I:%M %p UTC')}
+📱 Tap the link to view details!
+
+🤖 <i>Dubai Flea Market Tracker</i>"""
     
     console_log(f"📱 Sending Telegram notification for {len(events)} event(s)", "info")
     success, error = send_telegram(message)
@@ -959,16 +977,30 @@ def send_telegram_heartbeat():
     
     now = datetime.now(timezone.utc)
     seen_data = load_seen_events()
+    uptime_start = datetime.fromisoformat(CONFIG['uptime_start'].replace('Z', '+00:00'))
+    uptime_delta = now - uptime_start
+    uptime_hours = int(uptime_delta.total_seconds() // 3600)
+    uptime_mins = int((uptime_delta.total_seconds() % 3600) // 60)
     
-    message = f"""💓 <b>Bot Running OK</b>
+    message = f"""💓 <b>HEARTBEAT - Bot Status</b>
+━━━━━━━━━━━━━━━━━━━━━━
 
-✅ Status: RUNNING
-📊 Check #{CONFIG['total_checks']}
-⏰ {now.strftime('%H:%M UTC')}
-📦 Events tracked: {len(seen_data.get('event_ids', []))}
-📧 Emails sent: {CONFIG['emails_sent']}
+✅ <b>Status:</b> RUNNING & HEALTHY
 
-🤖 Dubai Flea Market Tracker"""
+📊 <b>Statistics:</b>
+   • Check #{CONFIG['total_checks']}
+   • Events tracked: {len(seen_data.get('event_ids', []))}
+   • New events found: {CONFIG['total_new_events']}
+   • Notifications sent: {CONFIG['emails_sent']}
+
+⏰ <b>Timing:</b>
+   • Current: {now.strftime('%I:%M %p UTC')}
+   • Check interval: Every {CONFIG['check_interval_minutes']} min
+   • Uptime: {uptime_hours}h {uptime_mins}m
+
+━━━━━━━━━━━━━━━━━━━━━━
+🟢 <i>All systems operational</i>
+🤖 <i>Dubai Flea Market Tracker</i>"""
     
     success, error = send_telegram(message)
     return success
@@ -1055,21 +1087,34 @@ def send_telegram_daily_summary():
     event_count = len(events) if events else 0
     seen_count = len(seen_data.get('event_ids', []))
     
-    message = f"""📊 <b>Daily Summary</b>
+    # Calculate uptime
+    uptime_start = datetime.fromisoformat(CONFIG['uptime_start'].replace('Z', '+00:00'))
+    uptime_delta = now - uptime_start
+    uptime_days = uptime_delta.days
+    uptime_hours = int((uptime_delta.total_seconds() % 86400) // 3600)
+    
+    message = f"""📊 <b>DAILY SUMMARY REPORT</b>
+━━━━━━━━━━━━━━━━━━━━━━
 📅 {now.strftime('%A, %B %d, %Y')}
 
-📈 <b>Statistics:</b>
-• Events on website: {event_count}
-• Events tracked: {seen_count}
-• Checks performed: {CONFIG['total_checks']}
-• New events today: {CONFIG['total_new_events']}
-• Emails sent: {CONFIG['emails_sent']}
+📈 <b>Today's Statistics:</b>
+   • Events on website: {event_count}
+   • Total events tracked: {seen_count}
+   • Checks performed: {CONFIG['total_checks']}
+   • New events detected: {CONFIG['total_new_events']}
+   • Notifications sent: {CONFIG['emails_sent']}
 
-✅ Tracker is running normally!
+⏱️ <b>Bot Performance:</b>
+   • Status: ✅ Running normally
+   • Uptime: {uptime_days}d {uptime_hours}h
+   • Check interval: Every {CONFIG['check_interval_minutes']} min
+   • Heartbeat: Every {CONFIG['heartbeat_hours']}h
 
-🔗 <a href="https://dubai-fleamarket.com">Check manually</a>
+━━━━━━━━━━━━━━━━━━━━━━
+🔗 <a href="https://dubai-fleamarket.com">View All Events →</a>
 
-🤖 Dubai Flea Market Tracker"""
+🤖 <i>Dubai Flea Market Tracker</i>
+💡 <i>You'll be notified instantly when new events are posted!</i>"""
     
     success, error = send_telegram(message)
     return success
@@ -1444,6 +1489,17 @@ def health():
         'checker_running': checker_alive,
         'next_check': CONFIG['next_check'],
         'next_heartbeat': CONFIG['next_heartbeat']
+    })
+
+@app.route('/api/health')
+def api_health():
+    \"\"\"Health check endpoint for uptime monitoring and self-ping.\"\"\"
+    return jsonify({
+        'status': 'healthy',
+        'uptime_start': CONFIG['uptime_start'],
+        'total_checks': CONFIG['total_checks'],
+        'tracker_enabled': CONFIG['tracker_enabled'],
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
 @app.route('/api/status')
@@ -2458,6 +2514,46 @@ def start_watchdog():
     watchdog = threading.Thread(target=watchdog_thread, daemon=True)
     watchdog.start()
 
+def self_ping_thread():
+    """Self-ping to prevent Render free tier from spinning down.
+    
+    Render spins down free web services after 15 minutes of inactivity.
+    This thread pings our own health endpoint every 10 minutes to keep alive.
+    """
+    if not SELF_PING_ENABLED:
+        console_log("🔄 Self-ping disabled via SELF_PING_ENABLED=false", "debug")
+        return
+    
+    # Wait for app to fully start
+    time.sleep(30)
+    
+    url = RENDER_URL if RENDER_URL else None
+    if not url:
+        console_log("⚠️ Self-ping: RENDER_EXTERNAL_URL not set, self-ping disabled", "warning")
+        return
+    
+    health_url = f"{url}/api/health"
+    console_log(f"🔄 Self-ping thread started - pinging {health_url} every {SELF_PING_INTERVAL} min", "info")
+    
+    while True:
+        try:
+            response = requests.get(health_url, timeout=30)
+            if response.status_code == 200:
+                console_log(f"🔄 Self-ping OK (status {response.status_code})", "debug")
+            else:
+                console_log(f"⚠️ Self-ping received status {response.status_code}", "warning")
+        except Exception as e:
+            console_log(f"⚠️ Self-ping failed: {str(e)[:50]}", "warning")
+        
+        # Wait for next ping
+        time.sleep(SELF_PING_INTERVAL * 60)
+
+def start_self_ping():
+    """Start the self-ping thread."""
+    if SELF_PING_ENABLED and RENDER_URL:
+        ping_thread = threading.Thread(target=self_ping_thread, daemon=True)
+        ping_thread.start()
+
 load_logs()
 load_recipient_status()
 load_event_stats()
@@ -2471,11 +2567,13 @@ console_log(f"⏰ Check Interval: {CONFIG['check_interval_minutes']} minutes", "
 console_log(f"💓 Heartbeat: Every {CONFIG['heartbeat_hours']} hours", "debug")
 console_log(f"👥 Recipients configured: {len(get_all_recipients())}", "debug")
 console_log(f"📊 Event stats loaded: {len(EVENT_STATS.get('daily', {}))} days of data", "debug")
+console_log(f"🔄 Self-ping: {'Enabled' if SELF_PING_ENABLED else 'Disabled'}", "debug")
 console_log("✅ System initialized successfully", "success")
 console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
 
 start_background_checker()
 start_watchdog()  # Start the watchdog to auto-restart if checker dies
+start_self_ping()  # Start self-ping to prevent Render from spinning down
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
