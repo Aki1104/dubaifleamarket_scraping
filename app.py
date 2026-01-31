@@ -713,7 +713,9 @@ def fetch_events():
         log_activity(f"Failed to fetch events: {e}", "error")
         return None
 
-def send_email_gmail(subject, body, recipient, max_retries=3):\n    \"\"\"Send email via Gmail SMTP (may be blocked on cloud hosts like Render).\"\"\"\n    global CONFIG
+def send_email_gmail(subject, body, recipient, max_retries=3):
+    """Send email via Gmail SMTP (may be blocked on cloud hosts like Render)."""
+    global CONFIG
     
     if not MY_EMAIL or not MY_PASSWORD:
         return False, "Gmail not configured"
@@ -1427,7 +1429,7 @@ def health():
 
 @app.route('/api/health')
 def api_health():
-    \"\"\"Health check endpoint for uptime monitoring and self-ping.\"\"\"
+    """Health check endpoint for uptime monitoring."""
     return jsonify({
         'status': 'healthy',
         'uptime_start': CONFIG['uptime_start'],
