@@ -2334,6 +2334,72 @@ def telegram_status():
         'chat_count': len([c for c in TELEGRAM_CHAT_IDS.split(',') if c.strip()]) if TELEGRAM_CHAT_IDS else 0
     })
 
+@app.route('/api/test-telegram-real', methods=['POST'])
+@rate_limit
+@require_password
+def test_telegram_real():
+    """Fetch REAL events from API and send via Telegram - tests full flow!"""
+    console_log("📱 TEST REAL TELEGRAM: Fetching real events from API...", "info")
+    
+    if not TELEGRAM_BOT_TOKEN:
+        return jsonify({'success': False, 'message': 'Telegram bot token not configured'}), 400
+    
+    # Use admin chat ID only for tests, or fall back to first chat ID
+    admin_chat_id = TELEGRAM_ADMIN_CHAT_ID or (TELEGRAM_CHAT_IDS.split(',')[0].strip() if TELEGRAM_CHAT_IDS else None)
+    if not admin_chat_id:
+        return jsonify({'success': False, 'message': 'No Telegram chat ID configured'}), 400
+    
+    # Fetch real events from the Dubai Flea Market API
+    events = fetch_events()
+    
+    if not events:
+        return jsonify({'success': False, 'message': 'Could not fetch events from API'}), 500
+    
+    # Take the first 3 events for the test
+    test_events = events[:3]
+    
+    now = datetime.now(timezone.utc)
+    message = f"""🧪 <b>REAL API TEST - Live Events</b>
+━━━━━━━━━━━━━━━━━━━━━━
+📅 {now.strftime('%B %d, %Y at %I:%M %p UTC')}
+
+🌐 <b>Fetched from:</b> dubai-fleamarket.com
+📊 <b>Events on site:</b> {len(events)} total
+
+━━━━━━━━━━━━━━━━━━━━━━
+<b>📍 Sample Events (First {len(test_events)}):</b>
+━━━━━━━━━━━━━━━━━━━━━━
+"""
+    
+    for i, event in enumerate(test_events, 1):
+        title = event.get('title', 'Untitled')[:60]
+        link = event.get('link', '#')
+        date = event.get('date_posted', 'Unknown')
+        message += f"""
+{i}. <b>{title}</b>
+   📅 Posted: {date}
+   🔗 <a href="{link}">View Event →</a>
+"""
+    
+    message += f"""
+━━━━━━━━━━━━━━━━━━━━━━
+✅ <b>API Connection:</b> Working!
+✅ <b>Telegram Delivery:</b> Success!
+🤖 <i>Dubai Flea Market Tracker</i>
+👤 <i>Admin test message</i>"""
+    
+    # Send to admin only
+    success, error = send_telegram(message, chat_id=admin_chat_id)
+    
+    if success:
+        log_activity(f"📱 Real API Telegram test sent ({len(test_events)} events)", "success")
+        return jsonify({
+            'success': True, 
+            'message': f'Real events sent via Telegram! ({len(events)} events on site, sent {len(test_events)} samples)'
+        })
+    else:
+        return jsonify({'success': False, 'message': f'Failed to send: {error}'}), 500
+
 @app.route('/api/theme', methods=['GET', 'POST'])
 @rate_limit
 def handle_theme():

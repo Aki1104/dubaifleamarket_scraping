@@ -1026,6 +1026,39 @@ async function testTelegram(type) {
     }
 }
 
+// Test Telegram with REAL events from the API
+async function testTelegramReal() {
+    const password = prompt('Enter admin password to test with REAL API events:');
+    if (!password) return;
+    
+    const loadingToast = showToast('🌐 Fetching real events from API...', 'loading', true);
+    
+    try {
+        const response = await fetch('/api/test-telegram-real', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        
+        const result = await response.json();
+        removeToast(loadingToast);
+        
+        if (response.status === 401) {
+            showToast('Invalid password', 'error');
+            return;
+        }
+        
+        if (result.success) {
+            showToast(`✅ ${result.message}`, 'success');
+        } else {
+            showToast(result.message || 'Failed to send', 'error');
+        }
+    } catch (err) {
+        removeToast(loadingToast);
+        showToast('Network error', 'error');
+    }
+}
+
 // Check and update Telegram status on page load
 async function updateTelegramStatus() {
     try {
