@@ -206,7 +206,7 @@ function closeSettingsModal() {
     if (modal) modal.classList.remove('show');
 }
 
-async function saveSettings() {
+function saveSettings() {
     console.log('[DEBUG] saveSettings() called');
     
     const heartbeatEnabled = document.getElementById('settings-heartbeat')?.checked ?? true;
@@ -215,59 +215,15 @@ async function saveSettings() {
     
     console.log('[DEBUG] Settings values:', { heartbeatEnabled, dailySummaryEnabled, trackerEnabled });
     
-    // Get password first
-    const password = prompt('Enter admin password to save settings:');
-    if (!password) {
-        console.log('[DEBUG] User cancelled password prompt');
-        showToast('Settings not saved - password required', 'warning');
-        return;
-    }
+    // Close settings modal first
+    closeSettingsModal();
     
-    console.log('[DEBUG] Password entered, length:', password.length);
-    
-    try {
-        console.log('[DEBUG] Sending POST to /api/settings...');
-        const response = await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                password: password,
-                heartbeat_enabled: heartbeatEnabled,
-                daily_summary_enabled: dailySummaryEnabled,
-                tracker_enabled: trackerEnabled
-            })
-        });
-        
-        const result = await response.json();
-        
-        console.log('[DEBUG] Response status:', response.status);
-        console.log('[DEBUG] Response data:', result);
-        
-        if (response.status === 401) {
-            console.log('[DEBUG] Authentication failed - 401');
-            showToast('Invalid password', 'error');
-            return;
-        }
-        
-        if (response.status === 429) {
-            console.log('[DEBUG] Rate limited - 429');
-            showToast('Too many requests. Please wait.', 'warning');
-            return;
-        }
-        
-        if (result.success) {
-            console.log('[DEBUG] Settings saved successfully');
-            showToast('Settings saved successfully!', 'success');
-            closeSettingsModal();
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            console.log('[DEBUG] Settings save failed:', result.message);
-            showToast(result.message || 'Failed to save settings', 'error');
-        }
-    } catch (error) {
-        console.error('[DEBUG] Network/fetch error:', error);
-        showToast('Network error', 'error');
-    }
+    // Use the password modal with the collected settings
+    secureAction('/api/settings', 'Settings saved successfully!', {
+        heartbeat_enabled: heartbeatEnabled,
+        daily_summary_enabled: dailySummaryEnabled,
+        tracker_enabled: trackerEnabled
+    });
 }
 
 function secureAction(endpoint, successMessage, data = {}) {
@@ -987,10 +943,7 @@ function startNotificationPolling() {
 }
 
 // ===== TELEGRAM TEST FUNCTIONS =====
-async function testTelegram(type) {
-    const password = prompt('Enter admin password to test Telegram:');
-    if (!password) return;
-    
+function testTelegram(type) {
     const typeLabels = {
         'simple': 'Test Message',
         'heartbeat': 'Heartbeat',
@@ -998,65 +951,12 @@ async function testTelegram(type) {
         'events': 'New Event'
     };
     
-    const loadingToast = showToast(`Sending ${typeLabels[type] || type}...`, 'loading', true);
-    
-    try {
-        const response = await fetch('/api/test-telegram', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, password })
-        });
-        
-        const result = await response.json();
-        removeToast(loadingToast);
-        
-        if (response.status === 401) {
-            showToast('Invalid password', 'error');
-            return;
-        }
-        
-        if (result.success) {
-            showToast(`📱 ${result.message}`, 'success');
-        } else {
-            showToast(result.message || 'Failed to send', 'error');
-        }
-    } catch (err) {
-        removeToast(loadingToast);
-        showToast('Network error', 'error');
-    }
+    secureAction('/api/test-telegram', `📱 ${typeLabels[type] || type} sent!`, { type });
 }
 
 // Test Telegram with REAL events from the API
-async function testTelegramReal() {
-    const password = prompt('Enter admin password to test with REAL API events:');
-    if (!password) return;
-    
-    const loadingToast = showToast('🌐 Fetching real events from API...', 'loading', true);
-    
-    try {
-        const response = await fetch('/api/test-telegram-real', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password })
-        });
-        
-        const result = await response.json();
-        removeToast(loadingToast);
-        
-        if (response.status === 401) {
-            showToast('Invalid password', 'error');
-            return;
-        }
-        
-        if (result.success) {
-            showToast(`✅ ${result.message}`, 'success');
-        } else {
-            showToast(result.message || 'Failed to send', 'error');
-        }
-    } catch (err) {
-        removeToast(loadingToast);
-        showToast('Network error', 'error');
-    }
+function testTelegramReal() {
+    secureAction('/api/test-telegram-real', '✅ Real events sent via Telegram!', {});
 }
 
 // Check and update Telegram status on page load
