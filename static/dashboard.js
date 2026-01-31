@@ -597,17 +597,12 @@ function updateDiagnostics(diag) {
             // Check Telegram first (primary)
             if (ep.telegram_configured) {
                 providerText = `📱 Telegram (${ep.telegram_chat_count} chat${ep.telegram_chat_count > 1 ? 's' : ''})`;
-                providerClass = 'good';
-                if (ep.sendgrid_configured) {
-                    providerText += ' + SendGrid';
-                } else if (ep.gmail_configured) {
-                    providerText += ' + Gmail';
+                if (ep.telegram_admin_configured) {
+                    providerText += ' 👤 Admin';
                 }
-            } else if (ep.sendgrid_configured) {
-                providerText = 'SendGrid API ✓';
                 providerClass = 'good';
                 if (ep.gmail_configured) {
-                    providerText += ' + Gmail backup';
+                    providerText += ' + Gmail';
                 }
             } else if (ep.gmail_configured) {
                 const ipv4 = ep.ipv4_forced ? ' (IPv4)' : '';

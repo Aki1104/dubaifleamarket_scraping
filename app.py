@@ -30,14 +30,6 @@ import secrets
 import time
 import re
 
-# SendGrid for email (uses HTTPS API, not blocked by cloud hosts)
-try:
-    from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail
-    SENDGRID_AVAILABLE = True
-except ImportError:
-    SENDGRID_AVAILABLE = False
-
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
@@ -190,29 +182,19 @@ LOGS_FILE = os.path.join(DATA_DIR, "activity_logs.json")
 RECIPIENT_STATUS_FILE = os.path.join(DATA_DIR, "recipient_status.json")
 EMAIL_HISTORY_FILE = os.path.join(DATA_DIR, "email_history.json")
 
-# SendGrid API (PRIMARY - uses HTTPS, not blocked by cloud hosts)
-# Get free API key: https://signup.sendgrid.com/ (100 emails/day free)
-SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
-SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL', '')  # Must be verified sender
-
 # Telegram Bot (FREE - unlimited messages, instant push notifications)
 # Create bot: @BotFather on Telegram, get token
 # Get chat ID: Send message to bot, then visit: https://api.telegram.org/bot<TOKEN>/getUpdates
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')  # Comma-separated chat IDs
+TELEGRAM_CHAT_IDS = os.environ.get('TELEGRAM_CHAT_IDS', '')  # Comma-separated chat IDs for NEW EVENTS
+TELEGRAM_ADMIN_CHAT_ID = os.environ.get('TELEGRAM_ADMIN_CHAT_ID', '')  # Admin only - receives heartbeat/status
 
-# Gmail SMTP (FALLBACK - may be blocked on some cloud hosts)
+# Gmail SMTP (may be blocked on some cloud hosts like Render free tier)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 MY_EMAIL = os.environ.get('MY_EMAIL', '')
 MY_PASSWORD = os.environ.get('MY_PASSWORD', '')
 TO_EMAIL = os.environ.get('TO_EMAIL', '')
-
-# Self-ping to prevent Render free tier from spinning down
-# Render spins down after 15 min of no traffic - this keeps it alive
-RENDER_URL = os.environ.get('RENDER_EXTERNAL_URL', '')  # Auto-set by Render
-SELF_PING_ENABLED = os.environ.get('SELF_PING_ENABLED', 'true').lower() == 'true'
-SELF_PING_INTERVAL = 10  # Ping every 10 minutes (less than 15 min timeout)
 
 # Force IPv4 for SMTP connections (fixes "Network is unreachable" on some cloud hosts)
 # This is a common issue on Render, Heroku, etc. where IPv6 is attempted but not available
@@ -731,50 +713,7 @@ def fetch_events():
         log_activity(f"Failed to fetch events: {e}", "error")
         return None
 
-def send_email_sendgrid(subject, body, recipient):
-    """Send email via SendGrid API (HTTPS - not blocked by cloud hosts)."""
-    global CONFIG
-    
-    if not SENDGRID_AVAILABLE:
-        console_log("⚠️ SendGrid not installed", "debug")
-        return False, "SendGrid not installed"
-    
-    if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
-        console_log("⚠️ SendGrid not configured (missing API key or from email)", "debug")
-        return False, "SendGrid not configured"
-    
-    try:
-        console_log(f"📧 Sending via SendGrid to {mask_email(recipient)}...", "debug")
-        
-        message = Mail(
-            from_email=SENDGRID_FROM_EMAIL,
-            to_emails=recipient,
-            subject=sanitize_string(subject, 100),
-            plain_text_content=body
-        )
-        
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        
-        if response.status_code in [200, 201, 202]:
-            CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
-            record_stat('emails_sent', 1)
-            console_log(f"✅ Email sent via SendGrid to {mask_email(recipient)} (status: {response.status_code})", "success")
-            add_to_email_history(recipient, subject, True, "SendGrid API")
-            return True, None
-        else:
-            error_msg = f"SendGrid status: {response.status_code}"
-            console_log(f"⚠️ {error_msg}", "warning")
-            return False, error_msg
-            
-    except Exception as e:
-        error_msg = str(e)[:100]
-        console_log(f"⚠️ SendGrid error: {error_msg}", "warning")
-        return False, error_msg
-
-def send_email_gmail(subject, body, recipient, max_retries=3):
-    """Send email via Gmail SMTP (fallback - may be blocked on cloud hosts)."""
-    global CONFIG
+def send_email_gmail(subject, body, recipient, max_retries=3):\n    \"\"\"Send email via Gmail SMTP (may be blocked on cloud hosts like Render).\"\"\"\n    global CONFIG
     
     if not MY_EMAIL or not MY_PASSWORD:
         return False, "Gmail not configured"
@@ -825,29 +764,25 @@ def send_email_gmail(subject, body, recipient, max_retries=3):
     return False, last_error
 
 def send_email_direct(subject, body, recipient):
-    """Direct email send without queueing. Tries SendGrid first, then Gmail."""
+    """Direct email send without queueing using Gmail SMTP."""
     global CONFIG
     
     if not recipient or not validate_email(recipient):
         return False
     
-    # Try SendGrid first (HTTPS API - not blocked)
-    success, error = send_email_sendgrid(subject, body, recipient)
-    if success:
-        return True
-    
-    # Fallback to Gmail SMTP
+    # Use Gmail SMTP
     if MY_EMAIL and MY_PASSWORD:
-        console_log("⚠️ SendGrid failed, trying Gmail SMTP...", "warning")
         success, error = send_email_gmail(subject, body, recipient, max_retries=1)
         if success:
             return True
+        console_log(f"❌ Gmail failed: {error}", "error")
+    else:
+        console_log("❌ Gmail not configured", "error")
     
-    console_log(f"❌ All email methods failed: {error}", "error")
     return False
 
 def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
-    """Send email notification. Tries SendGrid first, falls back to Gmail SMTP."""
+    """Send email notification via Gmail SMTP."""
     global CONFIG
     
     recipient = to_email or TO_EMAIL
@@ -860,33 +795,19 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
         add_to_email_history(recipient, subject, False, 'Invalid email format')
         return False
     
-    # Check if any email service is configured
-    sendgrid_ok = SENDGRID_AVAILABLE and SENDGRID_API_KEY and SENDGRID_FROM_EMAIL
-    gmail_ok = MY_EMAIL and MY_PASSWORD
-    
-    if not sendgrid_ok and not gmail_ok:
-        log_activity("No email service configured", "error")
-        add_to_email_history(recipient, subject, False, 'No email service configured')
+    # Check if Gmail is configured
+    if not MY_EMAIL or not MY_PASSWORD:
+        log_activity("Gmail not configured", "error")
+        add_to_email_history(recipient, subject, False, 'Gmail not configured')
         return False
     
-    # Try SendGrid first (HTTPS API - not blocked by cloud hosts)
-    if sendgrid_ok:
-        success, error = send_email_sendgrid(subject, body, recipient)
-        if success:
-            log_activity(f"📧 Email sent via SendGrid to {recipient[:15]}...", "success")
-            return True
-        console_log(f"⚠️ SendGrid failed: {error}, trying Gmail...", "warning")
+    # Send via Gmail SMTP
+    success, error = send_email_gmail(subject, body, recipient, max_retries=max_retries)
+    if success:
+        log_activity(f"📧 Email sent via Gmail to {recipient[:15]}...", "success")
+        return True
     
-    # Fallback to Gmail SMTP with retry
-    if gmail_ok:
-        success, error = send_email_gmail(subject, body, recipient, max_retries=max_retries)
-        if success:
-            log_activity(f"📧 Email sent via Gmail to {recipient[:15]}...", "success")
-            return True
-    else:
-        error = "Gmail not configured"
-    
-    # All immediate retries failed - queue for deferred retry
+    # Failed - queue for deferred retry
     console_log(f"📬 Queueing email for deferred retry: {mask_email(recipient)}", "info")
     add_to_email_queue(subject, body, recipient, priority)
     add_to_email_history(recipient, subject, False, f"Queued for retry: {error}")
@@ -968,8 +889,13 @@ def send_telegram_new_events(events):
     return success
 
 def send_telegram_heartbeat():
-    """Send heartbeat via Telegram."""
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_IDS:
+    """Send heartbeat via Telegram to ADMIN ONLY (not all subscribers)."""
+    if not TELEGRAM_BOT_TOKEN:
+        return False
+    
+    # Use admin chat ID only, or fall back to first chat ID
+    admin_chat_id = TELEGRAM_ADMIN_CHAT_ID or (TELEGRAM_CHAT_IDS[0] if TELEGRAM_CHAT_IDS else None)
+    if not admin_chat_id:
         return False
     
     if not CONFIG['heartbeat_enabled']:
@@ -1000,9 +926,11 @@ def send_telegram_heartbeat():
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🟢 <i>All systems operational</i>
-🤖 <i>Dubai Flea Market Tracker</i>"""
+🤖 <i>Dubai Flea Market Tracker</i>
+👤 <i>Admin-only message</i>"""
     
-    success, error = send_telegram(message)
+    # Send to admin only
+    success, error = send_telegram(message, chat_id=admin_chat_id)
     return success
 
 def send_new_event_email(events):
@@ -1076,8 +1004,13 @@ def send_heartbeat():
     return result
 
 def send_telegram_daily_summary():
-    """Send daily summary via Telegram."""
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_IDS:
+    """Send daily summary via Telegram to ADMIN ONLY."""
+    if not TELEGRAM_BOT_TOKEN:
+        return False
+    
+    # Use admin chat ID only, or fall back to first chat ID
+    admin_chat_id = TELEGRAM_ADMIN_CHAT_ID or (TELEGRAM_CHAT_IDS[0] if TELEGRAM_CHAT_IDS else None)
+    if not admin_chat_id:
         return False
     
     now = datetime.now(timezone.utc)
@@ -1114,9 +1047,10 @@ def send_telegram_daily_summary():
 🔗 <a href="https://dubai-fleamarket.com">View All Events →</a>
 
 🤖 <i>Dubai Flea Market Tracker</i>
-💡 <i>You'll be notified instantly when new events are posted!</i>"""
+👤 <i>Admin-only daily summary</i>"""
     
-    success, error = send_telegram(message)
+    # Send to admin only
+    success, error = send_telegram(message, chat_id=admin_chat_id)
     return success
 
 def send_daily_summary_email():
@@ -1578,12 +1512,10 @@ def api_diagnostics():
             'enabled_recipients': len(get_recipients())
         },
         'email_provider': {
-            'primary': 'Telegram' if (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS) else ('SendGrid API' if (SENDGRID_AVAILABLE and SENDGRID_API_KEY and SENDGRID_FROM_EMAIL) else 'Gmail SMTP'),
+            'primary': 'Telegram' if (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS) else 'Gmail SMTP',
             'telegram_configured': bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS),
             'telegram_chat_count': len([c for c in TELEGRAM_CHAT_IDS.split(',') if c.strip()]) if TELEGRAM_CHAT_IDS else 0,
-            'sendgrid_available': SENDGRID_AVAILABLE,
-            'sendgrid_configured': bool(SENDGRID_API_KEY and SENDGRID_FROM_EMAIL),
-            'sendgrid_from_email': SENDGRID_FROM_EMAIL if SENDGRID_FROM_EMAIL else None,
+            'telegram_admin_configured': bool(TELEGRAM_ADMIN_CHAT_ID),
             'gmail_configured': bool(MY_EMAIL and MY_PASSWORD),
             'gmail_from_email': MY_EMAIL if MY_EMAIL else None,
             'ipv4_forced': SMTP_USE_IPV4
@@ -2514,46 +2446,6 @@ def start_watchdog():
     watchdog = threading.Thread(target=watchdog_thread, daemon=True)
     watchdog.start()
 
-def self_ping_thread():
-    """Self-ping to prevent Render free tier from spinning down.
-    
-    Render spins down free web services after 15 minutes of inactivity.
-    This thread pings our own health endpoint every 10 minutes to keep alive.
-    """
-    if not SELF_PING_ENABLED:
-        console_log("🔄 Self-ping disabled via SELF_PING_ENABLED=false", "debug")
-        return
-    
-    # Wait for app to fully start
-    time.sleep(30)
-    
-    url = RENDER_URL if RENDER_URL else None
-    if not url:
-        console_log("⚠️ Self-ping: RENDER_EXTERNAL_URL not set, self-ping disabled", "warning")
-        return
-    
-    health_url = f"{url}/api/health"
-    console_log(f"🔄 Self-ping thread started - pinging {health_url} every {SELF_PING_INTERVAL} min", "info")
-    
-    while True:
-        try:
-            response = requests.get(health_url, timeout=30)
-            if response.status_code == 200:
-                console_log(f"🔄 Self-ping OK (status {response.status_code})", "debug")
-            else:
-                console_log(f"⚠️ Self-ping received status {response.status_code}", "warning")
-        except Exception as e:
-            console_log(f"⚠️ Self-ping failed: {str(e)[:50]}", "warning")
-        
-        # Wait for next ping
-        time.sleep(SELF_PING_INTERVAL * 60)
-
-def start_self_ping():
-    """Start the self-ping thread."""
-    if SELF_PING_ENABLED and RENDER_URL:
-        ping_thread = threading.Thread(target=self_ping_thread, daemon=True)
-        ping_thread.start()
-
 load_logs()
 load_recipient_status()
 load_event_stats()
@@ -2567,13 +2459,12 @@ console_log(f"⏰ Check Interval: {CONFIG['check_interval_minutes']} minutes", "
 console_log(f"💓 Heartbeat: Every {CONFIG['heartbeat_hours']} hours", "debug")
 console_log(f"👥 Recipients configured: {len(get_all_recipients())}", "debug")
 console_log(f"📊 Event stats loaded: {len(EVENT_STATS.get('daily', {}))} days of data", "debug")
-console_log(f"🔄 Self-ping: {'Enabled' if SELF_PING_ENABLED else 'Disabled'}", "debug")
+console_log(f"📱 Telegram Admin: {'Configured' if TELEGRAM_ADMIN_CHAT_ID else 'Not set'}", "debug")
 console_log("✅ System initialized successfully", "success")
 console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
 
 start_background_checker()
 start_watchdog()  # Start the watchdog to auto-restart if checker dies
-start_self_ping()  # Start self-ping to prevent Render from spinning down
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
