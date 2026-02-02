@@ -8,7 +8,8 @@
     8504,
     8394,
     8388,
-    8387
+    8387,
+    8647
   ],
   "event_details": [
     {
@@ -38,6 +39,13 @@
       "date_posted": "2026-01-27T12:18:50",
       "link": "https://dubai-fleamarket.com/product/al-twar-park-1-sunday-15-february-2026/",
       "first_seen": "2026-01-29 13:05 UTC"
+    },
+    {
+      "id": 8647,
+      "title": "Jewel of the Creek Pop up Flea Market / Deira / Saturday 7 February 2026",
+      "date_posted": "2026-02-02T12:48:34",
+      "link": "https://dubai-fleamarket.com/product/jewel-of-the-creek-pop-up-flea-market-deira-saturday-7-february-2026/",
+      "first_seen": "2026-02-02 10:09 UTC"
     }
   ]
 }
