@@ -1,5 +1,17 @@
 [
   {
+    "timestamp": "2026-02-08T23:26:35.353574+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 11:26 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T23:26:17.801603+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 11:26 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
     "timestamp": "2026-02-08T23:26:00.880693+00:00",
     "timestamp_formatted": "Feb 08, 2026 at 11:26 PM",
     "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
@@ -583,18 +595,6 @@
   },
   {
     "timestamp": "2026-02-08T22:56:39.782523+00:00",
-    "timestamp_formatted": "Feb 08, 2026 at 10:56 PM",
-    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
-    "level": "warning"
-  },
-  {
-    "timestamp": "2026-02-08T22:56:22.239691+00:00",
-    "timestamp_formatted": "Feb 08, 2026 at 10:56 PM",
-    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
-    "level": "warning"
-  },
-  {
-    "timestamp": "2026-02-08T22:56:04.032356+00:00",
     "timestamp_formatted": "Feb 08, 2026 at 10:56 PM",
     "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
     "level": "warning"

@@ -1,23 +1,5 @@
 [
   {
-    "timestamp": "2026-02-08T20:39:50.196025+00:00",
-    "timestamp_formatted": "Feb 08 at 08:39 PM",
-    "recipient": "steevenparubrub@gmail.com",
-    "recipient_masked": "st***ub@gmail.com",
-    "subject": "Email Delivery Issue",
-    "success": false,
-    "error": "Queued for retry: Server not connected"
-  },
-  {
-    "timestamp": "2026-02-08T20:40:08.423489+00:00",
-    "timestamp_formatted": "Feb 08 at 08:40 PM",
-    "recipient": "steevenparubrub@gmail.com",
-    "recipient_masked": "st***ub@gmail.com",
-    "subject": "Email Delivery Issue",
-    "success": false,
-    "error": "Queued for retry: Server not connected"
-  },
-  {
     "timestamp": "2026-02-08T20:40:26.594914+00:00",
     "timestamp_formatted": "Feb 08 at 08:40 PM",
     "recipient": "steevenparubrub@gmail.com",
@@ -4501,6 +4483,24 @@
   },
   {
     "timestamp": "2026-02-08T23:26:00.884539+00:00",
+    "timestamp_formatted": "Feb 08 at 11:26 PM",
+    "recipient": "steevenparubrub@gmail.com",
+    "recipient_masked": "st***ub@gmail.com",
+    "subject": "Email Delivery Issue",
+    "success": false,
+    "error": "Queued for retry: Server not connected"
+  },
+  {
+    "timestamp": "2026-02-08T23:26:17.804431+00:00",
+    "timestamp_formatted": "Feb 08 at 11:26 PM",
+    "recipient": "steevenparubrub@gmail.com",
+    "recipient_masked": "st***ub@gmail.com",
+    "subject": "Email Delivery Issue",
+    "success": false,
+    "error": "Queued for retry: Server not connected"
+  },
+  {
+    "timestamp": "2026-02-08T23:26:35.366857+00:00",
     "timestamp_formatted": "Feb 08 at 11:26 PM",
     "recipient": "steevenparubrub@gmail.com",
     "recipient_masked": "st***ub@gmail.com",
