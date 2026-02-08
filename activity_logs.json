@@ -1,5 +1,11 @@
 [
   {
+    "timestamp": "2026-02-08T17:20:51.732912+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:20 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
     "timestamp": "2026-02-08T17:20:32.860757+00:00",
     "timestamp_formatted": "Feb 08, 2026 at 05:20 PM",
     "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
@@ -591,12 +597,6 @@
     "timestamp": "2026-02-08T16:51:27.566493+00:00",
     "timestamp_formatted": "Feb 08, 2026 at 04:51 PM",
     "message": "\u2728 No new events found",
-    "level": "info"
-  },
-  {
-    "timestamp": "2026-02-08T16:51:27.563985+00:00",
-    "timestamp_formatted": "Feb 08, 2026 at 04:51 PM",
-    "message": "\ud83d\udce1 Fetched 4 events from API",
     "level": "info"
   }
 ]
