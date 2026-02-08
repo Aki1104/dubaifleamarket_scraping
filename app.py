@@ -12,12 +12,12 @@ Features:
 =============================================================================
 """
 
-from flask import Flask, render_template, jsonify, request, session, abort
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
+import json
+import os
 from functools import wraps
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
-import json
-import os
 import threading
 import requests
 import smtplib
@@ -30,8 +30,32 @@ import secrets
 import time
 import re
 
+# Load .env file so credentials (ADMIN_PASSWORD, etc.) are available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, rely on system env vars
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+)
+app.permanent_session_lifetime = timedelta(hours=int(os.environ.get('ADMIN_SESSION_HOURS', '8')))
+# ===== SECURITY: Rate Limiting =====
+# ===== SECURITY: Input Validation =====
+# ===== SECURITY: Password Protection =====
+# ===== SECURITY: Headers Middleware =====
+# ===== CONFIGURATION =====
+# ===== EMAIL QUEUE - Persistent retry for failed emails =====
+# ===== EVENT STATISTICS - For charting =====
+# ===== SYSTEM CONSOLE - Terminal-like logging =====
+# ===== RECIPIENT STATUS MANAGEMENT =====
+# ===== EMAIL HISTORY MANAGEMENT =====
+# ===== HELPER FUNCTIONS =====
 
 # ===== SECURITY: Rate Limiting =====
 rate_limit_data = defaultdict(list)
@@ -80,6 +104,58 @@ def rate_limit(f):
             return jsonify({'error': 'Too many requests. Please wait.'}), 429
         return f(*args, **kwargs)
     return decorated_function
+
+# --- Event Tracking Data Loader ---
+def load_tracked_events():
+    try:
+        seen_data = load_seen_events()
+        return seen_data.get('event_details', [])
+    except Exception:
+        return []
+
+def get_latest_event_summary():
+    try:
+        events = load_tracked_events()
+        if not events:
+            return None
+        latest = events[-1]
+        return {
+            'id': latest.get('id', ''),
+            'title': sanitize_string(str(latest.get('title', 'Untitled')), 120),
+            'link': latest.get('link', '#'),
+            'first_seen': latest.get('first_seen') or latest.get('date_posted') or ''
+        }
+    except Exception:
+        return None
+
+# --- Admin Auth (simple, to be improved) ---
+def is_admin():
+    return session.get('admin_logged_in', False)
+
+def safe_next_url(next_url):
+    if not next_url or not isinstance(next_url, str):
+        return url_for('dashboard')
+    if not next_url.startswith('/'):
+        return url_for('dashboard')
+    return next_url
+
+def require_admin(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if is_admin():
+            return f(*args, **kwargs)
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'Unauthorized'}), 401
+        return redirect(url_for('admin_login', next=request.path))
+    return decorated_function
+
+# --- API: Get tracked events ---
+@app.route('/api/events')
+@rate_limit
+@require_admin
+def api_events():
+    events = load_tracked_events()
+    return jsonify({'events': events})
 
 # ===== SECURITY: Input Validation =====
 def sanitize_string(text, max_length=500):
@@ -140,6 +216,10 @@ def require_password(f):
         console_log(f"🔐 AUTH: Checking password for endpoint: {request.endpoint}", "debug")
         
         try:
+            if is_admin():
+                console_log(f"✅ AUTH SUCCESS (session): {request.endpoint}", "success")
+                return f(*args, **kwargs)
+
             data = request.get_json() or {}
             password = data.get('password', '')
             
@@ -152,6 +232,7 @@ def require_password(f):
                 return jsonify({'error': 'Invalid password', 'auth_required': True}), 401
             
             console_log(f"✅ AUTH SUCCESS: {request.endpoint}", "success")
+            log_admin_action(request.endpoint or request.path, f"{request.method} {request.path}")
             
             return f(*args, **kwargs)
         except Exception as e:
@@ -181,6 +262,7 @@ STATUS_FILE = os.path.join(DATA_DIR, "tracker_status.json")
 LOGS_FILE = os.path.join(DATA_DIR, "activity_logs.json")
 RECIPIENT_STATUS_FILE = os.path.join(DATA_DIR, "recipient_status.json")
 EMAIL_HISTORY_FILE = os.path.join(DATA_DIR, "email_history.json")
+ADMIN_AUDIT_FILE = os.path.join(DATA_DIR, "admin_audit.json")
 
 # Telegram Bot (FREE - unlimited messages, instant push notifications)
 # Create bot: @BotFather on Telegram, get token
@@ -216,11 +298,20 @@ CONFIG = {
     'total_checks': 0,
     'total_new_events': 0,
     'emails_sent': 0,
-    'uptime_start': datetime.now(timezone.utc).isoformat()
+    'uptime_start': datetime.now(timezone.utc).isoformat(),
+    'last_smtp_error': None,
+    'last_smtp_error_at': None,
+    'last_daily_summary_sent_at': None,
+    'last_daily_summary_recipient_count': 0
 }
 
 ACTIVITY_LOGS = []
 MAX_LOGS = 100
+ADMIN_AUDIT_LOGS = []
+MAX_ADMIN_AUDIT = 300
+VISITOR_TOTAL = 0
+VISITOR_LOG = []  # List of ISO timestamps for last 24h
+LAST_GMAIL_CONFIG_LOG_AT = None
 
 # ===== CHECK HISTORY - Card-based check results =====
 CHECK_HISTORY = []
@@ -248,6 +339,24 @@ def load_email_queue():
         except Exception as e:
             console_log(f"⚠️ Failed to load email queue: {e}", "warning")
             EMAIL_QUEUE = []
+    ensure_email_queue_ids()
+
+def ensure_email_queue_ids():
+    """Ensure every queued item has a stable id."""
+    global EMAIL_QUEUE
+    changed = False
+    for item in EMAIL_QUEUE:
+        if not isinstance(item, dict):
+            continue
+        if not item.get('id'):
+            item['id'] = secrets.token_hex(8)
+            changed = True
+    if changed:
+        save_email_queue()
+
+def load_admin_audit_on_startup():
+    global ADMIN_AUDIT_LOGS
+    ADMIN_AUDIT_LOGS = load_admin_audit()
 
 def save_email_queue():
     """Save email queue to file."""
@@ -265,6 +374,7 @@ def add_to_email_queue(subject, body, recipient, priority='normal'):
     next_retry = now + timedelta(minutes=EMAIL_RETRY_INTERVALS[0])
     
     queue_item = {
+        'id': secrets.token_hex(8),
         'subject': subject,
         'body': body,
         'recipient': recipient,
@@ -342,6 +452,33 @@ def process_email_queue():
     if processed or removed:
         save_email_queue()
         console_log(f"📬 Queue processed: {processed} sent, {removed} expired, {len(EMAIL_QUEUE)} remaining", "info")
+
+def build_email_queue_payload(limit=None):
+    """Return a safe, UI-ready email queue payload."""
+    ensure_email_queue_ids()
+    items = EMAIL_QUEUE[:]
+    if isinstance(limit, int):
+        items = items[:limit]
+
+    payload_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        payload_items.append({
+            'id': item.get('id'),
+            'subject': sanitize_string(item.get('subject', ''), 120),
+            'recipient_masked': mask_email(item.get('recipient', '')),
+            'next_retry_display': format_timestamp(item.get('next_retry')),
+            'priority': item.get('priority', 'normal'),
+            'attempts': item.get('attempts', 0),
+            'last_error': sanitize_string(item.get('last_error', ''), 120) if item.get('last_error') else None
+        })
+
+    return {
+        'pending_count': len(EMAIL_QUEUE),
+        'high_priority': len([e for e in EMAIL_QUEUE if e.get('priority') == 'high']),
+        'items': payload_items
+    }
 
 # ===== EVENT STATISTICS - For charting =====
 EVENT_STATS_FILE = os.path.join(DATA_DIR, "event_stats.json")
@@ -431,6 +568,11 @@ API_DIAGNOSTICS = {
     'last_successful_call': None
 }
 
+def set_last_smtp_error(message):
+    """Track latest SMTP error for diagnostics UI."""
+    CONFIG['last_smtp_error'] = message
+    CONFIG['last_smtp_error_at'] = datetime.now(timezone.utc).isoformat()
+
 def console_log(message, log_type="info"):
     """Add detailed log to system console - terminal style."""
     global SYSTEM_CONSOLE
@@ -446,7 +588,12 @@ def console_log(message, log_type="info"):
     SYSTEM_CONSOLE.insert(0, entry)
     if len(SYSTEM_CONSOLE) > MAX_CONSOLE_LOGS:
         SYSTEM_CONSOLE = SYSTEM_CONSOLE[:MAX_CONSOLE_LOGS]
-    print(f"[CONSOLE][{log_type.upper()}] {message}")
+    try:
+        print(f"[CONSOLE][{log_type.upper()}] {message}")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        # Fallback for terminals that can't handle emoji (e.g. Windows cp1252)
+        safe_msg = message.encode('ascii', 'replace').decode('ascii')
+        print(f"[CONSOLE][{log_type.upper()}] {safe_msg}")
 
 # ===== SMTP CONNECTION WITH IPv4 FORCING =====
 def get_smtp_connection(timeout=30):
@@ -559,6 +706,18 @@ def format_timestamp(iso_string):
     except:
         return iso_string[:16] if iso_string else '--'
 
+def format_hour_offset(base_hour, offset_hours):
+    """Format a UTC hour with offset as a local HH:00 AM/PM string."""
+    try:
+        local_hour = (int(base_hour) + int(offset_hours)) % 24
+        period = 'AM' if local_hour < 12 else 'PM'
+        display_hour = local_hour % 12
+        if display_hour == 0:
+            display_hour = 12
+        return f"{display_hour:02d}:00 {period}"
+    except Exception:
+        return '--'
+
 # ===== HELPER FUNCTIONS =====
 def get_all_recipients():
     """Get all configured recipients."""
@@ -591,6 +750,67 @@ def log_activity(message, level="info"):
         pass
     print(f"[{level.upper()}] {message}")
 
+def load_admin_audit():
+    """Load admin audit log from file."""
+    if os.path.exists(ADMIN_AUDIT_FILE):
+        try:
+            with open(ADMIN_AUDIT_FILE, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+        except Exception:
+            pass
+    return []
+
+def save_admin_audit(entries):
+    """Save admin audit log to file."""
+    try:
+        with open(ADMIN_AUDIT_FILE, 'w') as f:
+            json.dump(entries, f, indent=2)
+    except Exception as e:
+        log_activity(f"Failed to save admin audit: {e}", "error")
+
+def log_admin_action(action, details=None):
+    """Record an admin action for auditing."""
+    global ADMIN_AUDIT_LOGS
+    now = datetime.now(timezone.utc)
+    entry = {
+        'timestamp': now.isoformat(),
+        'timestamp_formatted': now.strftime('%b %d, %Y at %I:%M %p'),
+        'ip': get_client_ip(),
+        'action': sanitize_string(action, 120),
+        'details': sanitize_string(details or '', 200)
+    }
+    ADMIN_AUDIT_LOGS.insert(0, entry)
+    if len(ADMIN_AUDIT_LOGS) > MAX_ADMIN_AUDIT:
+        ADMIN_AUDIT_LOGS = ADMIN_AUDIT_LOGS[:MAX_ADMIN_AUDIT]
+    save_admin_audit(ADMIN_AUDIT_LOGS)
+
+def notify_admin_alert(message, subject='Admin Alert'):
+    """Best-effort admin alert via Telegram or email fallback."""
+    if TELEGRAM_BOT_TOKEN and (TELEGRAM_ADMIN_CHAT_ID or TELEGRAM_CHAT_IDS):
+        admin_chat_id = TELEGRAM_ADMIN_CHAT_ID or (TELEGRAM_CHAT_IDS.split(',')[0] if TELEGRAM_CHAT_IDS else None)
+        if admin_chat_id:
+            success, _ = send_telegram(message, chat_id=admin_chat_id)
+            if success:
+                return True
+
+    if CONFIG.get('heartbeat_email'):
+        return send_email(subject, message, CONFIG['heartbeat_email'])
+    return False
+
+def record_visit():
+    """Record a client landing page visit without a database."""
+    global VISITOR_TOTAL, VISITOR_LOG
+    if session.get('visitor_tracked'):
+        return
+    now = datetime.now(timezone.utc)
+    VISITOR_TOTAL += 1
+    VISITOR_LOG.append(now.isoformat())
+    cutoff = now - timedelta(hours=24)
+    VISITOR_LOG = [ts for ts in VISITOR_LOG if datetime.fromisoformat(ts) >= cutoff]
+    session['visitor_tracked'] = True
+
 def load_logs():
     """Load activity logs from file."""
     global ACTIVITY_LOGS
@@ -618,6 +838,27 @@ def save_status(status):
             json.dump(status, f, indent=2)
     except Exception as e:
         log_activity(f"Failed to save status: {e}", "error")
+
+def should_send_daily_summary():
+    """Check if daily summary is due based on hour and last sent date."""
+    if not CONFIG.get('daily_summary_enabled', False):
+        return False
+
+    now = datetime.now(timezone.utc)
+    today = now.strftime('%Y-%m-%d')
+    status = load_status()
+    last_summary = status.get('last_daily_summary')
+
+    if last_summary == today:
+        return False
+
+    return now.hour >= CONFIG.get('daily_summary_hour', 9)
+
+def mark_daily_summary_sent():
+    """Persist that today's summary was sent."""
+    status = load_status()
+    status['last_daily_summary'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    save_status(status)
 
 def load_seen_events():
     """Load seen events."""
@@ -718,6 +959,7 @@ def send_email_gmail(subject, body, recipient, max_retries=3):
     global CONFIG
     
     if not MY_EMAIL or not MY_PASSWORD:
+        set_last_smtp_error("Gmail not configured")
         return False, "Gmail not configured"
     
     msg = MIMEMultipart('alternative')
@@ -742,24 +984,29 @@ def send_email_gmail(subject, body, recipient, max_retries=3):
             
             CONFIG['emails_sent'] = CONFIG.get('emails_sent', 0) + 1
             record_stat('emails_sent', 1)
+            CONFIG['last_smtp_error'] = None
+            CONFIG['last_smtp_error_at'] = None
             console_log(f"✅ Email sent via Gmail to {mask_email(recipient)}", "success")
             add_to_email_history(recipient, subject, True, "Gmail SMTP")
             return True, None
             
         except (OSError, socket.error) as e:
             last_error = str(e)[:50]
+            set_last_smtp_error(f"Network error: {last_error}")
             console_log(f"⚠️ Network error (attempt {attempt}): {last_error}", "warning")
             if attempt < max_retries:
                 time.sleep(5 * attempt)
                 continue
         except smtplib.SMTPException as e:
             last_error = str(e)[:50]
+            set_last_smtp_error(f"SMTP error: {last_error}")
             console_log(f"⚠️ SMTP error (attempt {attempt}): {last_error}", "warning")
             if attempt < max_retries:
                 time.sleep(3)
                 continue
         except Exception as e:
             last_error = str(e)[:50]
+            set_last_smtp_error(f"Gmail error: {last_error}")
             console_log(f"❌ Gmail error: {last_error}", "error")
             break
     
@@ -799,7 +1046,19 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
     
     # Check if Gmail is configured
     if not MY_EMAIL or not MY_PASSWORD:
-        log_activity("Gmail not configured", "error")
+        global LAST_GMAIL_CONFIG_LOG_AT
+        now = datetime.now(timezone.utc)
+        should_log = True
+        if LAST_GMAIL_CONFIG_LOG_AT:
+            delta = (now - LAST_GMAIL_CONFIG_LOG_AT).total_seconds()
+            should_log = delta > 300
+
+        if should_log:
+            log_activity("Gmail not configured", "error")
+            set_last_smtp_error("Gmail not configured")
+            notify_admin_alert("Gmail not configured. Email delivery failed.", "Email Delivery Failure")
+            LAST_GMAIL_CONFIG_LOG_AT = now
+
         add_to_email_history(recipient, subject, False, 'Gmail not configured')
         return False
     
@@ -813,6 +1072,7 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
     console_log(f"📬 Queueing email for deferred retry: {mask_email(recipient)}", "info")
     add_to_email_queue(subject, body, recipient, priority)
     add_to_email_history(recipient, subject, False, f"Queued for retry: {error}")
+    notify_admin_alert(f"Email failed and queued for retry: {mask_email(recipient)}", "Email Delivery Issue")
     return False
 
 # ===== TELEGRAM BOT NOTIFICATIONS =====
@@ -888,6 +1148,9 @@ def send_telegram_new_events(events):
     
     console_log(f"📱 Sending Telegram notification for {len(events)} event(s)", "info")
     success, error = send_telegram(message)
+    if not success:
+        log_activity(f"📱 Telegram failed for new events: {error}", "warning")
+        notify_admin_alert(f"Telegram failed for new event alerts: {error}", "Telegram Alert Failure")
     return success
 
 def send_telegram_heartbeat():
@@ -933,12 +1196,15 @@ def send_telegram_heartbeat():
     
     # Send to admin only
     success, error = send_telegram(message, chat_id=admin_chat_id)
+    if not success:
+        log_activity(f"📱 Telegram heartbeat failed: {error}", "warning")
+        notify_admin_alert(f"Telegram heartbeat failed: {error}", "Telegram Heartbeat Failure")
     return success
 
 def send_new_event_email(events):
     """Send new event notification to enabled recipients. Uses HIGH priority for queue."""
     # Send via Telegram first (instant, free, reliable)
-    send_telegram_new_events(events)
+    telegram_success = send_telegram_new_events(events)
     
     # Also send via email
     subject = f"🎉 {len(events)} New Dubai Flea Market Event(s)!"
@@ -953,8 +1219,15 @@ def send_new_event_email(events):
     body += "\n🤖 Sent automatically by Dubai Flea Market Tracker"
     
     console_log(f"📧 Sending new event notification to {len(get_recipients())} recipient(s)", "info")
+    fail_count = 0
     for email in get_recipients():
-        send_email(subject, body, email, priority='high')  # High priority for new events
+        if not send_email(subject, body, email, priority='high'):
+            fail_count += 1
+
+    if not telegram_success:
+        notify_admin_alert("Telegram failed for new events. Email fallback attempted.", "Failover Notice")
+    if fail_count > 0:
+        notify_admin_alert(f"Email failed for {fail_count} recipient(s) during new event alert.", "Email Delivery Issues")
 
 def send_heartbeat():
     """Send heartbeat status email."""
@@ -1003,6 +1276,7 @@ def send_heartbeat():
         console_log("✅ Heartbeat email sent successfully", "success")
     else:
         console_log("❌ Failed to send heartbeat email", "error")
+        notify_admin_alert("Heartbeat email failed. Telegram heartbeat may still be delivered.", "Heartbeat Email Failure")
     return result
 
 def send_telegram_daily_summary():
@@ -1053,12 +1327,15 @@ def send_telegram_daily_summary():
     
     # Send to admin only
     success, error = send_telegram(message, chat_id=admin_chat_id)
+    if not success:
+        log_activity(f"📱 Telegram daily summary failed: {error}", "warning")
+        notify_admin_alert(f"Telegram daily summary failed: {error}", "Telegram Summary Failure")
     return success
 
 def send_daily_summary_email():
     """Send daily summary email."""
     # Send via Telegram first (instant, free, reliable)
-    send_telegram_daily_summary()
+    telegram_success = send_telegram_daily_summary()
     
     console_log("📊 Generating daily summary...", "info")
     now = datetime.now(timezone.utc)
@@ -1092,12 +1369,22 @@ def send_daily_summary_email():
 {'=' * 60}
 """
     
-    success = True
-    for email in get_recipients():
-        if not send_email(subject, body, email):
-            success = False
-    
-    return success
+    recipients = get_recipients()
+    success_count = 0
+    for email in recipients:
+        if send_email(subject, body, email):
+            success_count += 1
+
+    if success_count > 0:
+        CONFIG['last_daily_summary_sent_at'] = datetime.now(timezone.utc).isoformat()
+        CONFIG['last_daily_summary_recipient_count'] = success_count
+
+    if not telegram_success:
+        notify_admin_alert("Telegram daily summary failed. Email summary attempted.", "Failover Notice")
+    if success_count == 0:
+        notify_admin_alert("Daily summary email failed for all recipients.", "Daily Summary Failure")
+
+    return success_count > 0
 
 def check_for_events():
     """Main event checking logic with detailed console logging."""
@@ -1256,6 +1543,16 @@ def background_checker():
                         CONFIG['next_heartbeat'] = (datetime.now(timezone.utc) + timedelta(hours=CONFIG['heartbeat_hours'])).isoformat()
                         log_activity("💓 Heartbeat sent!", "success")
                         console_log("✅ Heartbeat email sent successfully", "success")
+
+                if should_send_daily_summary():
+                    log_activity("📊 Sending scheduled daily summary...")
+                    console_log("📊 Sending scheduled daily summary...", "info")
+                    if send_daily_summary_email():
+                        mark_daily_summary_sent()
+                        log_activity("📊 Daily summary sent", "success")
+                        console_log("✅ Daily summary email sent", "success")
+                    else:
+                        console_log("❌ Failed to send daily summary", "error")
                 
                 # Process email queue periodically
                 now = datetime.now(timezone.utc)
@@ -1316,11 +1613,46 @@ def background_checker():
 
 # ===== ROUTES =====
 @app.route('/')
+def index():
+    """Client-facing landing page."""
+    now = datetime.now(timezone.utc)
+    record_visit()
+    return render_template('index.html', current_year=now.year)
+
+@app.route('/login', methods=['GET', 'POST'])
 @rate_limit
+def admin_login():
+    """Admin login page."""
+    if request.method == 'GET':
+        next_url = safe_next_url(request.args.get('next'))
+        return render_template('admin_login.html', error=None, next=next_url)
+
+    password = request.form.get('password', '')
+    next_url = safe_next_url(request.form.get('next'))
+
+    if verify_password(password):
+        session.permanent = True
+        session['admin_logged_in'] = True
+        session['admin_logged_in_at'] = datetime.now(timezone.utc).isoformat()
+        log_admin_action('admin_login', f"{request.method} {request.path}")
+        return redirect(next_url)
+
+    return render_template('admin_login.html', error='Invalid password', next=next_url)
+
+@app.route('/logout')
+def admin_logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+@app.route('/admin')
+@app.route('/dashboard')
+@rate_limit
+@require_admin
 def dashboard():
-    """Main dashboard page."""
+    """Admin dashboard page."""
     status = load_status()
     seen_data = load_seen_events()
+    tracked_events_table = seen_data.get('event_details', [])[-50:][::-1]
     now = datetime.now(timezone.utc)
     
     next_check_seconds = 0
@@ -1338,6 +1670,19 @@ def dashboard():
             next_heartbeat_seconds = max(0, int((next_dt - now).total_seconds()))
         except:
             pass
+
+    recent_events = []
+    event_details = seen_data.get('event_details', [])
+    if isinstance(event_details, list) and event_details:
+        for event in event_details[-6:][::-1]:
+            if not isinstance(event, dict):
+                continue
+            recent_events.append({
+                'id': event.get('id') or event.get('event_id'),
+                'title': event.get('title') or event.get('name'),
+                'first_seen': event.get('first_seen') or event.get('timestamp'),
+                'link': event.get('link') or event.get('url')
+            })
     
     uptime_str = "Just started"
     try:
@@ -1392,11 +1737,15 @@ def dashboard():
         status=status,
         seen_count=len(seen_data.get('event_ids', [])),
         recent_events=seen_data.get('event_details', [])[-10:][::-1],
+        tracked_events_table=tracked_events_table,
         live_events=live_events,
         logs=ACTIVITY_LOGS[:50],
         all_recipients=all_recipients,
         recipient_status=recipient_status,
         mask_email=mask_email,
+        format_timestamp=format_timestamp,
+        format_hour_offset=format_hour_offset,
+        email_queue=EMAIL_QUEUE,
         next_check_seconds=next_check_seconds,
         next_heartbeat_seconds=next_heartbeat_seconds,
         uptime_str=uptime_str,
@@ -1470,7 +1819,13 @@ def api_status():
         'logs': ACTIVITY_LOGS[:20],
         'next_check_seconds': next_check_seconds,
         'next_heartbeat_seconds': next_heartbeat_seconds,
-        'email_queue_count': len(EMAIL_QUEUE)
+        'email_queue_count': len(EMAIL_QUEUE),
+        'latest_event': get_latest_event_summary(),
+        'recent_events': recent_events,
+        'visitor_stats': {
+            'total': VISITOR_TOTAL,
+            'last_24h': len(VISITOR_LOG)
+        }
     })
 
 @app.route('/api/console')
@@ -1479,7 +1834,21 @@ def api_console():
     """API endpoint for system console logs."""
     return jsonify({
         'console': SYSTEM_CONSOLE[:100],
-        'diagnostics': API_DIAGNOSTICS,
+        'diagnostics': {
+            **API_DIAGNOSTICS,
+            'email_provider': {
+                'primary': 'Telegram' if (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS) else 'Gmail SMTP',
+                'telegram_configured': bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS),
+                'telegram_chat_count': len([c for c in TELEGRAM_CHAT_IDS.split(',') if c.strip()]) if TELEGRAM_CHAT_IDS else 0,
+                'telegram_admin_configured': bool(TELEGRAM_ADMIN_CHAT_ID),
+                'gmail_configured': bool(MY_EMAIL and MY_PASSWORD),
+                'gmail_from_email': MY_EMAIL if MY_EMAIL else None,
+                'ipv4_forced': SMTP_USE_IPV4
+            },
+            'email_queue': build_email_queue_payload(limit=10),
+            'last_smtp_error': CONFIG.get('last_smtp_error'),
+            'last_smtp_error_at': CONFIG.get('last_smtp_error_at')
+        },
         'check_history': CHECK_HISTORY[:20]  # Include recent check history
     })
 
@@ -1885,6 +2254,7 @@ def send_daily_summary_now():
     log_activity("📊 Manual daily summary triggered", "info")
     
     if send_daily_summary_email():
+        mark_daily_summary_sent()
         return jsonify({'success': True, 'message': 'Daily summary sent!'})
     
     return jsonify({'success': False, 'message': 'Failed to send summary'})
@@ -2421,6 +2791,82 @@ def test_telegram_real():
         console_log(f"❌ TEST REAL TELEGRAM: Exception - {str(e)[:100]}", "error")
         return jsonify({'success': False, 'message': f'Error: {str(e)[:100]}'}), 500
 
+@app.route('/api/retry-queue', methods=['POST'])
+@rate_limit
+@require_admin
+def retry_email_queue():
+    """Manually process the email retry queue."""
+    before = len(EMAIL_QUEUE)
+    process_email_queue()
+    after = len(EMAIL_QUEUE)
+    log_admin_action('retry_email_queue', f"processed={before - after}, remaining={after}")
+    return jsonify({'success': True, 'processed': before - after, 'remaining': after})
+
+@app.route('/api/email-queue', methods=['GET'])
+@rate_limit
+@require_admin
+def get_email_queue():
+    """Get full email queue for admin UI."""
+    return jsonify({'success': True, **build_email_queue_payload()})
+
+@app.route('/api/email-queue/clear', methods=['POST'])
+@rate_limit
+@require_admin
+def clear_email_queue():
+    """Clear all queued emails."""
+    global EMAIL_QUEUE
+    cleared = len(EMAIL_QUEUE)
+    EMAIL_QUEUE = []
+    save_email_queue()
+    log_admin_action('email_queue_clear', f"cleared={cleared}")
+    return jsonify({'success': True, 'cleared': cleared})
+
+@app.route('/api/email-queue/delete/<item_id>', methods=['POST'])
+@rate_limit
+@require_admin
+def delete_email_queue_item(item_id):
+    """Delete a single queued email by id."""
+    global EMAIL_QUEUE
+    removed = False
+    for item in EMAIL_QUEUE[:]:
+        if item.get('id') == item_id:
+            EMAIL_QUEUE.remove(item)
+            removed = True
+            break
+    if removed:
+        save_email_queue()
+        log_admin_action('email_queue_delete', f"id={item_id}")
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'message': 'Item not found'}), 404
+
+@app.route('/api/email-queue/retry/<item_id>', methods=['POST'])
+@rate_limit
+@require_admin
+def retry_email_queue_item(item_id):
+    """Retry a single queued email by id."""
+    global EMAIL_QUEUE
+    target = None
+    for item in EMAIL_QUEUE:
+        if item.get('id') == item_id:
+            target = item
+            break
+    if not target:
+        return jsonify({'success': False, 'message': 'Item not found'}), 404
+
+    success, error = send_email_gmail(target.get('subject', ''), target.get('body', ''), target.get('recipient', ''), max_retries=1)
+    if success:
+        EMAIL_QUEUE.remove(target)
+        save_email_queue()
+        log_admin_action('email_queue_retry', f"id={item_id} success")
+        return jsonify({'success': True, 'message': 'Email sent'})
+
+    target['attempts'] = target.get('attempts', 0) + 1
+    target['last_error'] = error or 'Send failed'
+    target['next_retry'] = (datetime.now(timezone.utc) + timedelta(minutes=EMAIL_RETRY_INTERVALS[-1])).isoformat()
+    save_email_queue()
+    log_admin_action('email_queue_retry', f"id={item_id} failed")
+    return jsonify({'success': False, 'message': 'Send failed'})
+
 @app.route('/api/theme', methods=['GET', 'POST'])
 @rate_limit
 def handle_theme():
@@ -2538,6 +2984,7 @@ def start_watchdog():
 load_logs()
 load_recipient_status()
 load_event_stats()
+load_admin_audit_on_startup()
 
 # ===== STARTUP CONSOLE MESSAGES =====
 console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")

@@ -9,6 +9,10 @@ var pendingMaskedEmail = null;
 var autoScrollEnabled = true;
 var lastConsoleCount = 0;
 var timerRefreshAttempts = 0;
+var trackedTableRows = [];
+var trackedTableFiltered = [];
+var trackedTablePage = 1;
+var trackedTablePageSize = 10;
 
 function formatTime(seconds, showHours = false) {
     if (seconds <= 0) return showHours ? '00:00:00' : '00:00';
@@ -193,6 +197,33 @@ function closeShowEmailModal() {
     if (modal) modal.classList.remove('show');
     
     pendingMaskedEmail = null;
+}
+
+function closeModalById(modalId) {
+    switch (modalId) {
+        case 'password-modal':
+            closeModal();
+            break;
+        case 'show-email-modal':
+            closeShowEmailModal();
+            break;
+        case 'settings-modal':
+            closeSettingsModal();
+            break;
+        case 'test-single-email-modal':
+            closeTestSingleEmailModal();
+            break;
+        case 'test-new-event-modal':
+            closeTestNewEventModal();
+            break;
+        case 'smtp-diagnostic-modal':
+            closeSmtpDiagnosticModal();
+            break;
+        default: {
+            const modal = document.getElementById(modalId);
+            if (modal) modal.classList.remove('show');
+        }
+    }
 }
 
 // ===== SETTINGS MODAL =====
@@ -388,6 +419,13 @@ window.addEventListener('unhandledrejection', function(event) {
 // Initialize timers and polling
 document.addEventListener('DOMContentLoaded', function() {
     console.log('[DEBUG] DOMContentLoaded - Dashboard starting up');
+
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', event => {
+            if (event.target !== overlay) return;
+            closeModalById(overlay.id);
+        });
+    });
     
     // Immediately refresh timers from server on page load
     console.log('[DEBUG] Calling refreshTimersFromServer()');
@@ -411,9 +449,112 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Check Telegram status
     updateTelegramStatus();
+
+    // Initialize tracked events table
+    setupTrackedEventsTable();
+
+    // System health badge
+    updateHealthBadge();
+    setInterval(updateHealthBadge, 15000);
+
+    fetchEmailQueue();
+    setInterval(fetchEmailQueue, 15000);
     
     console.log('[DEBUG] Dashboard initialization complete');
 });
+
+function updateHealthBadge() {
+    const badge = document.getElementById('system-health-badge');
+    if (!badge) return;
+
+    fetch('/api/health')
+        .then(response => response.json())
+        .then(data => {
+            const isHealthy = data.status === 'healthy';
+            badge.className = 'health-badge' + (isHealthy ? ' good' : ' bad');
+            badge.innerHTML = `<i class="bi bi-activity"></i> ${isHealthy ? 'Healthy' : 'Degraded'}`;
+        })
+        .catch(() => {
+            badge.className = 'health-badge warn';
+            badge.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Unreachable';
+        });
+}
+
+function retryEmailQueue() {
+    showToast('Processing email queue...', 'loading', true);
+    fetch('/api/retry-queue', { method: 'POST' })
+        .then(res => {
+            if (res.status === 401) {
+                showToast('Admin login required', 'warning');
+                return null;
+            }
+            return res.json();
+        })
+        .then(result => {
+            if (!result) return;
+            showToast(`Queue processed: ${result.processed} sent, ${result.remaining} remaining`, 'success');
+            updateConsoleAndDiagnostics();
+            fetchEmailQueue();
+        })
+        .catch(() => showToast('Failed to process queue', 'error'));
+}
+
+function setupTrackedEventsTable() {
+    const body = document.getElementById('tracked-events-body');
+    if (!body) return;
+    trackedTableRows = Array.from(body.querySelectorAll('tr'));
+    trackedTableFiltered = trackedTableRows.slice();
+    trackedTablePage = 1;
+    renderTrackedEventsTable();
+}
+
+function filterTrackedEvents() {
+    const input = document.getElementById('tracked-table-search');
+    const query = input ? input.value.toLowerCase().trim() : '';
+    trackedTableFiltered = trackedTableRows.filter(row => {
+        if (row.querySelector('.table-empty')) return false;
+        return row.textContent.toLowerCase().includes(query);
+    });
+    trackedTablePage = 1;
+    renderTrackedEventsTable();
+}
+
+function renderTrackedEventsTable() {
+    const body = document.getElementById('tracked-events-body');
+    const meta = document.getElementById('tracked-table-meta');
+    const pagination = document.getElementById('tracked-table-pagination');
+    if (!body || !pagination) return;
+
+    const total = trackedTableFiltered.length;
+    const totalPages = Math.max(1, Math.ceil(total / trackedTablePageSize));
+    if (trackedTablePage > totalPages) trackedTablePage = totalPages;
+
+    const start = (trackedTablePage - 1) * trackedTablePageSize;
+    const end = start + trackedTablePageSize;
+
+    body.innerHTML = '';
+    if (total === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="table-empty">No matching events</td></tr>';
+    } else {
+        trackedTableFiltered.slice(start, end).forEach(row => body.appendChild(row));
+    }
+
+    if (meta) {
+        meta.textContent = `Showing ${total === 0 ? 0 : start + 1}-${Math.min(end, total)} of ${total}`;
+    }
+
+    pagination.innerHTML = '';
+    for (let page = 1; page <= totalPages; page++) {
+        const btn = document.createElement('button');
+        btn.textContent = page;
+        btn.className = page === trackedTablePage ? 'active' : '';
+        btn.addEventListener('click', () => {
+            trackedTablePage = page;
+            renderTrackedEventsTable();
+        });
+        pagination.appendChild(btn);
+    }
+}
 
 // ===== SYSTEM CONSOLE FUNCTIONS =====
 function toggleAutoScroll() {
@@ -442,6 +583,7 @@ async function updateConsoleAndDiagnostics() {
         
         // Update diagnostics
         updateDiagnostics(data.diagnostics);
+        updateEmailQueue(data.diagnostics?.email_queue);
         
         // Update check history cards
         if (data.check_history) {
@@ -543,16 +685,16 @@ function updateDiagnostics(diag) {
     }
     
     // Email provider (from diagnostics endpoint)
-    if (data.email_provider) {
+    if (diag.email_provider) {
         const emailProvider = document.getElementById('diag-email-provider');
         if (emailProvider) {
-            const ep = data.email_provider;
+            const ep = diag.email_provider;
             let providerText = 'Not Configured';
             let providerClass = 'error';
             
             // Check Telegram first (primary)
             if (ep.telegram_configured) {
-                providerText = `📱 Telegram (${ep.telegram_chat_count} chat${ep.telegram_chat_count > 1 ? 's' : ''})`;
+                providerText = `📱 Telegram Primary (${ep.telegram_chat_count} chat${ep.telegram_chat_count > 1 ? 's' : ''})`;
                 if (ep.telegram_admin_configured) {
                     providerText += ' 👤 Admin';
                 }
@@ -569,6 +711,14 @@ function updateDiagnostics(diag) {
             emailProvider.textContent = providerText;
             emailProvider.className = 'diag-value ' + providerClass;
         }
+    }
+
+    const smtpError = document.getElementById('diag-smtp-error');
+    if (smtpError) {
+        const errorText = diag.last_smtp_error ? diag.last_smtp_error : 'None';
+        const errorTime = diag.last_smtp_error_at ? ` (${diag.last_smtp_error_at})` : '';
+        smtpError.textContent = errorText + errorTime;
+        smtpError.className = 'diag-value error-text-sm' + (diag.last_smtp_error ? ' error' : '');
     }
     
     // Email queue (from status endpoint)
@@ -667,6 +817,129 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function updateEmailQueue(queue) {
+    if (!queue) return;
+
+    const list = document.getElementById('email-queue-list');
+    const countBadge = document.getElementById('email-queue-count');
+
+    if (countBadge) {
+        const count = queue.pending_count || 0;
+        countBadge.textContent = `${count} pending`;
+    }
+
+    if (!list) return;
+
+    const items = queue.items || [];
+    if (!items.length) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <i class="bi bi-inbox"></i>
+                <p>No pending emails</p>
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = items.map(item => {
+        const priority = (item.priority || 'normal').toLowerCase();
+        const attempts = item.attempts || 0;
+        const subject = escapeHtml(item.subject || 'Untitled');
+        const recipient = escapeHtml(item.recipient_masked || '');
+        const nextRetry = escapeHtml(item.next_retry_display || '--');
+        const lastError = item.last_error ? escapeHtml(item.last_error) : '';
+        const itemId = item.id || '';
+
+        return `
+            <div class="email-queue-item">
+                <div class="email-queue-main">
+                    <div class="email-queue-subject">${subject}</div>
+                    <div class="email-queue-meta">
+                        <span><i class="bi bi-envelope"></i> ${recipient}</span>
+                        <span><i class="bi bi-clock"></i> Retry: ${nextRetry}</span>
+                    </div>
+                    ${lastError ? `<div class="email-queue-error"><i class="bi bi-exclamation-triangle"></i> ${lastError}</div>` : ''}
+                </div>
+                <div class="email-queue-badges">
+                    <span class="queue-badge ${priority === 'high' ? 'high' : 'normal'}">${priority.toUpperCase()}</span>
+                    <span class="queue-badge attempts">${attempts} attempt${attempts === 1 ? '' : 's'}</span>
+                </div>
+                <div class="email-queue-item-actions">
+                    <button class="queue-action-btn" onclick="retryQueueItem('${itemId}')">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        Try
+                    </button>
+                    <button class="queue-action-btn danger" onclick="deleteQueueItem('${itemId}')">
+                        <i class="bi bi-trash3"></i>
+                        Delete
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function fetchEmailQueue() {
+    try {
+        const response = await fetch('/api/email-queue');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.success) {
+            updateEmailQueue(data);
+        }
+    } catch (e) {
+        console.log('[DEBUG] fetchEmailQueue failed:', e);
+    }
+}
+
+function clearEmailQueue() {
+    if (!confirm('Delete all queued emails?')) return;
+    showToast('Clearing email queue...', 'loading', true);
+    fetch('/api/email-queue/clear', { method: 'POST' })
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                showToast(`Queue cleared (${result.cleared})`, 'success');
+                fetchEmailQueue();
+            } else {
+                showToast(result.message || 'Failed to clear queue', 'error');
+            }
+        })
+        .catch(() => showToast('Failed to clear queue', 'error'));
+}
+
+function retryQueueItem(itemId) {
+    if (!itemId) return;
+    showToast('Retrying queued email...', 'loading', true);
+    fetch(`/api/email-queue/retry/${itemId}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                showToast(result.message || 'Email sent', 'success');
+            } else {
+                showToast(result.message || 'Send failed', 'error');
+            }
+            fetchEmailQueue();
+        })
+        .catch(() => showToast('Failed to retry email', 'error'));
+}
+
+function deleteQueueItem(itemId) {
+    if (!itemId) return;
+    showToast('Removing queued email...', 'loading', true);
+    fetch(`/api/email-queue/delete/${itemId}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                showToast('Queued email deleted', 'success');
+                fetchEmailQueue();
+            } else {
+                showToast(result.message || 'Delete failed', 'error');
+            }
+        })
+        .catch(() => showToast('Failed to delete queued email', 'error'));
 }
 
 // ===== STATISTICS CHART =====

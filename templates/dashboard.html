@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dubai Flea Market | Admin Dashboard</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>" type="image/svg+xml">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <!-- Chart.js for statistics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="theme-{{ theme }}">
+<body class="theme-{{ theme }}" data-next-check="{{ next_check_seconds }}" data-next-heartbeat="{{ next_heartbeat_seconds }}">
     <!-- Header -->
     <header class="header">
         <div class="header-content">
@@ -27,9 +27,17 @@
                     <i class="bi bi-gear"></i>
                     Settings
                 </button>
+                <a class="header-btn" href="/logout">
+                    <i class="bi bi-box-arrow-right"></i>
+                    Logout
+                </a>
                 <div class="security-badge">
                     <i class="bi bi-shield-check"></i>
                     Secured
+                </div>
+                <div class="health-badge" id="system-health-badge">
+                    <i class="bi bi-activity"></i>
+                    Checking...
                 </div>
                 <div class="status-pill online">
                     <div class="pulse"></div>
@@ -42,6 +50,19 @@
 
     <!-- Main -->
     <main class="main">
+        {% if config.last_daily_summary_sent_at %}
+        <section class="summary-banner">
+            <div class="summary-banner-content">
+                <div class="summary-banner-icon"><i class="bi bi-calendar2-check"></i></div>
+                <div>
+                    <div class="summary-banner-title">Daily summary sent</div>
+                    <div class="summary-banner-meta">
+                        {{ format_timestamp(config.last_daily_summary_sent_at) }} · {{ config.last_daily_summary_recipient_count }} recipient{{ 's' if config.last_daily_summary_recipient_count != 1 else '' }}
+                    </div>
+                </div>
+            </div>
+        </section>
+        {% endif %}
         <!-- Stats -->
         <section>
             <div class="section-header">
@@ -209,6 +230,7 @@
                             <div class="schedule-info">
                                 <div class="schedule-label">Daily Summary Time</div>
                                 <div class="schedule-value">{{ "%02d:00"|format(config.daily_summary_hour) }} UTC ({{ "%d"|format(config.daily_summary_hour) if config.daily_summary_hour <= 12 else "%d"|format(config.daily_summary_hour - 12) }}:00 {{ "AM" if config.daily_summary_hour < 12 else "PM" }} UTC)</div>
+                                <div class="schedule-local">Dubai: {{ format_hour_offset(config.daily_summary_hour, 4) }} · Philippines: {{ format_hour_offset(config.daily_summary_hour, 8) }}</div>
                             </div>
                         </div>
                         <div class="schedule-item">
@@ -394,11 +416,15 @@
                                 <div class="diag-value error-text-sm" id="diag-last-error">None</div>
                             </div>
                             <div class="diag-item">
-                                <div class="diag-label">� Email Provider</div>
+                                <div class="diag-label">Email Provider</div>
                                 <div class="diag-value good" id="diag-email-provider">Loading...</div>
                             </div>
                             <div class="diag-item">
-                                <div class="diag-label">�📬 Email Queue</div>
+                                <div class="diag-label">Last SMTP Error</div>
+                                <div class="diag-value error-text-sm" id="diag-smtp-error">None</div>
+                            </div>
+                            <div class="diag-item">
+                                <div class="diag-label">Email Queue</div>
                                 <div class="diag-value" id="diag-email-queue">0</div>
                             </div>
                         </div>
@@ -408,6 +434,55 @@
                         </div>                        <button class="btn btn-sm btn-outline" onclick="runSmtpDiagnostic()" style="margin-top: 1rem; width: 100%;">
                             <i class="bi bi-wrench"></i> Diagnose Gmail SMTP
                         </button>                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pending Email Queue -->
+        <section class="section-gap">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="bi bi-inbox"></i>
+                        Pending Email Queue
+                    </div>
+                    <div class="email-queue-actions">
+                        <button class="btn btn-sm btn-outline" onclick="retryEmailQueue()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Try All
+                        </button>
+                        <button class="btn btn-sm btn-outline" onclick="clearEmailQueue()">
+                            <i class="bi bi-trash3"></i>
+                            Delete All
+                        </button>
+                    </div>
+                    <span class="badge info" id="email-queue-count">{{ email_queue|length }} pending</span>
+                </div>
+                <div class="card-body">
+                    <div class="email-queue-list" id="email-queue-list">
+                        {% if email_queue %}
+                        {% for item in email_queue %}
+                        <div class="email-queue-item">
+                            <div class="email-queue-main">
+                                <div class="email-queue-subject">{{ item.subject }}</div>
+                                <div class="email-queue-meta">
+                                    <span><i class="bi bi-envelope"></i> {{ mask_email(item.recipient) }}</span>
+                                    <span><i class="bi bi-clock"></i> Retry: {{ format_timestamp(item.next_retry) }}</span>
+                                </div>
+                            </div>
+                            <div class="email-queue-badges">
+                                <span class="queue-badge {{ 'high' if item.priority == 'high' else 'normal' }}">{{ item.priority|upper }}</span>
+                                <span class="queue-badge attempts">{{ item.attempts }} attempt{{ 's' if item.attempts != 1 else '' }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="empty-state">
+                            <i class="bi bi-inbox"></i>
+                            <p>No pending emails</p>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </section>
@@ -602,6 +677,55 @@
                         </div>
                         <div class="search-results-info" id="search-results-info" style="display: none;"></div>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tracked Events Table -->
+        <section class="section-gap">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="bi bi-table"></i>
+                        Tracked Events Table
+                    </div>
+                    <span class="badge info">{{ tracked_events_table|length }} shown</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-controls">
+                        <div class="table-search">
+                            <i class="bi bi-search"></i>
+                            <input type="text" id="tracked-table-search" placeholder="Search tracked events..." oninput="filterTrackedEvents()">
+                        </div>
+                        <div class="table-meta" id="tracked-table-meta">Showing 0</div>
+                    </div>
+                    <div class="events-table-wrap">
+                        <table class="events-table" id="tracked-events-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>First Seen</th>
+                                    <th>Link</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tracked-events-body">
+                                {% for event in tracked_events_table %}
+                                <tr>
+                                    <td>#{{ event.id }}</td>
+                                    <td>{{ event.title[:80] }}{% if event.title|length > 80 %}...{% endif %}</td>
+                                    <td>{{ event.first_seen or event.date_posted or 'N/A' }}</td>
+                                    <td><a class="table-link" href="{{ event.link }}" target="_blank">Open</a></td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="table-empty">No tracked events yet</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-pagination" id="tracked-table-pagination"></div>
                 </div>
             </div>
         </section>
@@ -911,8 +1035,10 @@
     
     <!-- Initialize timer variables from Flask AFTER loading the JS file -->
     <script>
-        nextCheckSeconds = {{ next_check_seconds }};
-        nextHeartbeatSeconds = {{ next_heartbeat_seconds }};
+        const nextCheckAttr = document.body.dataset.nextCheck || '0';
+        const nextHeartbeatAttr = document.body.dataset.nextHeartbeat || '0';
+        nextCheckSeconds = parseInt(nextCheckAttr, 10) || 0;
+        nextHeartbeatSeconds = parseInt(nextHeartbeatAttr, 10) || 0;
         // Immediately update timers with the values
         updateTimers();
         

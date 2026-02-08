@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dubai Flea Market Intelligence</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        display: ['Fraunces', 'serif'],
+                        body: ['Sora', 'sans-serif']
+                    },
+                    colors: {
+                        sand: '#f6f1e8',
+                        ink: '#1d232b',
+                        accent: '#0f766e',
+                        accentDark: '#0a5f5a'
+                    },
+                    boxShadow: {
+                        glow: '0 20px 60px rgba(20, 24, 30, 0.18)'
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        .float-orb { animation: floatOrb 14s ease-in-out infinite; }
+        @keyframes floatOrb { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(18px); } }
+        .fade-up { opacity: 0; transform: translateY(18px); animation: fadeUp 0.7s ease forwards; }
+        @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) {
+            .fade-up { animation: none; opacity: 1; transform: none; }
+            .float-orb { animation: none; }
+        }
+    </style>
+</head>
+<body class="font-body bg-sand text-ink dark:bg-slate-950 dark:text-slate-100">
+    <div class="pointer-events-none fixed -left-32 -top-32 h-[480px] w-[480px] rounded-full bg-emerald-500/40 blur-3xl float-orb"></div>
+    <div class="pointer-events-none fixed -bottom-48 -right-32 h-[480px] w-[480px] rounded-full bg-amber-500/40 blur-3xl float-orb" style="animation-delay: 3s;"></div>
+    <div class="pointer-events-none fixed inset-0 bg-[linear-gradient(transparent_24px,rgba(0,0,0,0.04)_25px),linear-gradient(90deg,transparent_24px,rgba(0,0,0,0.04)_25px)] bg-[length:32px_32px] opacity-40 dark:opacity-20"></div>
+
+    <header class="sticky top-0 z-20 border-b border-black/10 bg-sand/90 backdrop-blur-xl dark:border-slate-700/40 dark:bg-slate-950/80">
+        <nav class="container mx-auto flex items-center justify-between gap-6 px-6 py-4" id="site-nav">
+            <div class="flex items-center gap-4">
+                <div class="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-400 text-white font-bold">DFM</div>
+                <div>
+                    <div class="font-semibold">Dubai Flea Market Intelligence</div>
+                    <div class="text-sm text-slate-500 dark:text-slate-400">Real-time listings and alerts</div>
+                </div>
+            </div>
+
+            <div class="hidden items-center gap-6 text-sm text-slate-500 dark:text-slate-300 lg:flex" id="nav-links">
+                <a class="hover:text-accent" href="#features">Features</a>
+                <a class="hover:text-accent" href="#reliability">Reliability</a>
+                <a class="hover:text-accent" href="#security">Security</a>
+                <a class="hover:text-accent" href="#contact">Contact</a>
+            </div>
+
+            <div class="hidden items-center gap-3 lg:flex">
+                <button class="flex h-10 w-10 items-center justify-center rounded-full border border-accent/40 text-accent transition hover:-translate-y-0.5 hover:shadow-glow" type="button" onclick="toggleTheme()" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+                    <i class="bi bi-moon-stars"></i>
+                </button>
+                <a class="inline-flex h-10 items-center rounded-full border border-accent/40 px-4 text-sm font-semibold text-accent transition hover:-translate-y-0.5 hover:shadow-glow" href="/login">Admin</a>
+                <a class="inline-flex h-10 items-center rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-4 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5" href="#contact">Request Demo</a>
+            </div>
+
+            <button class="flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white/70 text-slate-700 dark:border-slate-700/40 dark:bg-slate-900/70 dark:text-slate-100 lg:hidden" type="button" aria-label="Toggle navigation" aria-expanded="false" onclick="toggleNav()" id="nav-toggle">
+                <i class="bi bi-list"></i>
+            </button>
+        </nav>
+
+        <div class="container mx-auto hidden px-6 pb-4 lg:hidden" id="mobile-menu">
+            <div class="flex flex-col gap-4 rounded-2xl border border-black/5 bg-white/90 p-4 text-sm text-slate-600 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/90 dark:text-slate-200">
+                <a class="hover:text-accent" href="#features">Features</a>
+                <a class="hover:text-accent" href="#reliability">Reliability</a>
+                <a class="hover:text-accent" href="#security">Security</a>
+                <a class="hover:text-accent" href="#contact">Contact</a>
+                <div class="flex items-center gap-3 pt-2">
+                    <button class="flex h-10 w-10 items-center justify-center rounded-full border border-accent/40 text-accent" type="button" onclick="toggleTheme()" aria-label="Toggle theme" title="Toggle theme">
+                        <i class="bi bi-moon-stars"></i>
+                    </button>
+                    <a class="inline-flex h-10 items-center rounded-full border border-accent/40 px-4 text-sm font-semibold text-accent" href="/login">Admin</a>
+                    <a class="inline-flex h-10 items-center rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-4 text-sm font-semibold text-white" href="#contact">Request Demo</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container relative z-10 mx-auto px-6 pb-16 pt-10">
+        <section class="grid items-center gap-10 lg:grid-cols-2 fade-up">
+            <div>
+                <p class="uppercase tracking-[0.24em] text-xs font-semibold text-accent">Live market intelligence</p>
+                <h1 class="mt-3 text-4xl font-display font-semibold leading-tight sm:text-5xl">Stay ahead of new Dubai Flea Market listings in minutes.</h1>
+                <p class="mt-4 text-base text-slate-600 dark:text-slate-300">
+                    A real-time tracking system that monitors listings, sends instant alerts,
+                    and delivers daily summaries — built for one dedicated client at a time.
+                </p>
+                <div class="mt-6 flex flex-wrap gap-3">
+                    <a class="rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-5 py-2 text-sm font-semibold text-white shadow-glow" href="#contact">Book a Demo</a>
+                    <a class="rounded-full border border-black/10 px-5 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700/50 dark:text-slate-200" href="#features">Explore Features</a>
+                </div>
+
+                <div class="mt-6 grid gap-3 sm:grid-cols-3">
+                    <div class="rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+                        <div class="text-lg font-semibold">15 min</div>
+                        <div class="text-sm text-slate-500">Live scan interval</div>
+                    </div>
+                    <div class="rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+                        <div class="text-lg font-semibold">24/7</div>
+                        <div class="text-sm text-slate-500">Continuous monitoring</div>
+                    </div>
+                    <div class="rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+                        <div class="text-lg font-semibold">0 delay</div>
+                        <div class="text-sm text-slate-500">Instant Telegram alerts</div>
+                    </div>
+                </div>
+
+                <div class="mt-6 rounded-2xl border border-black/5 bg-white/90 p-4 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                    <div class="flex items-center justify-between text-sm font-semibold">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(56,189,248,0.15)]"></span>
+                            Live Progress Feed
+                        </div>
+                        <span class="rounded-full bg-emerald-500/10 px-2 py-1 text-[0.65rem] text-emerald-700 dark:text-emerald-300">Auto-updating</span>
+                    </div>
+                    <div class="mt-3 grid gap-2" id="live-feed-body">
+                        <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi bi-search"></i></span>
+                            <span class="min-w-0 flex-1">Scanning for new listings...</span>
+                            <span class="text-xs text-slate-500">just now</span>
+                        </div>
+                        <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi bi-telegram"></i></span>
+                            <span class="min-w-0 flex-1">Telegram heartbeat sent</span>
+                            <span class="text-xs text-slate-500">1 min ago</span>
+                        </div>
+                        <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi bi-check-circle"></i></span>
+                            <span class="min-w-0 flex-1">API response OK (200)</span>
+                            <span class="text-xs text-slate-500">2 min ago</span>
+                        </div>
+                        <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi bi-shield-check"></i></span>
+                            <span class="min-w-0 flex-1">Security scan passed</span>
+                            <span class="text-xs text-slate-500">5 min ago</span>
+                        </div>
+                        <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi bi-envelope-check"></i></span>
+                            <span class="min-w-0 flex-1">Email queue healthy (0 pending)</span>
+                            <span class="text-xs text-slate-500">8 min ago</span>
+                        </div>
+                        <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi bi-database-check"></i></span>
+                            <span class="min-w-0 flex-1">Data snapshot saved</span>
+                            <span class="text-xs text-slate-500">12 min ago</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-center">
+                <div class="w-full max-w-md rounded-3xl border border-emerald-600/20 bg-white/90 p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/90">
+                    <div class="flex items-center justify-between">
+                        <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Live</span>
+                        <span class="rounded-full border border-black/10 px-2 py-1 text-[0.65rem] text-slate-500 dark:border-slate-700/50">Telegram Primary</span>
+                    </div>
+                    <div class="mt-4 flex items-center gap-3 rounded-2xl bg-emerald-500/10 p-3">
+                        <span class="inline-block h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_0_10px_rgba(15,118,110,0.15)]"></span>
+                        <div>
+                            <div class="font-semibold">Event monitoring running</div>
+                            <div class="text-sm text-slate-500">Last sync 2 minutes ago</div>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid gap-3">
+                        <div class="flex items-center justify-between rounded-2xl border border-black/5 bg-white p-3 dark:border-slate-700/40 dark:bg-slate-900/80">
+                            <div>
+                                <div class="font-semibold">New vendor listings detected</div>
+                                <div class="text-sm text-slate-500">3 new events, 2 alerts sent</div>
+                            </div>
+                            <span class="rounded-full bg-emerald-500/15 px-2 py-1 text-[0.65rem] text-emerald-700">Verified</span>
+                        </div>
+                        <div class="flex items-center justify-between rounded-2xl border border-black/5 bg-white p-3 dark:border-slate-700/40 dark:bg-slate-900/80">
+                            <div>
+                                <div class="font-semibold">Daily summary queued</div>
+                                <div class="text-sm text-slate-500">Scheduled for 09:00 UTC</div>
+                            </div>
+                            <span class="rounded-full bg-slate-200 px-2 py-1 text-[0.65rem] text-slate-600 dark:bg-slate-800 dark:text-slate-300">Scheduled</span>
+                        </div>
+                        <div class="flex items-center justify-between rounded-2xl border border-black/5 bg-white p-3 dark:border-slate-700/40 dark:bg-slate-900/80">
+                            <div>
+                                <div class="font-semibold">Email fallback active</div>
+                                <div class="text-sm text-slate-500">Retry queue healthy</div>
+                            </div>
+                            <span class="rounded-full bg-emerald-500/15 px-2 py-1 text-[0.65rem] text-emerald-700">Protected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-5 fade-up" id="metric-strip">
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+                <i class="bi bi-activity text-xl text-accent"></i>
+                <div>
+                    <div class="text-xs text-slate-500">Total Checks</div>
+                    <div class="text-lg font-semibold" id="metric-total-checks">--</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+                <i class="bi bi-calendar-event text-xl text-accent"></i>
+                <div>
+                    <div class="text-xs text-slate-500">Events Tracked</div>
+                    <div class="text-lg font-semibold" id="metric-events">--</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+                <i class="bi bi-envelope-check text-xl text-accent"></i>
+                <div>
+                    <div class="text-xs text-slate-500">Emails Sent</div>
+                    <div class="text-lg font-semibold" id="metric-emails">--</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+                <i class="bi bi-inbox text-xl text-accent"></i>
+                <div>
+                    <div class="text-xs text-slate-500">Queue Pending</div>
+                    <div class="text-lg font-semibold" id="metric-queue">--</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+                <i class="bi bi-people text-xl text-accent"></i>
+                <div>
+                    <div class="text-xs text-slate-500">Visitors (24h)</div>
+                    <div class="text-lg font-semibold" id="metric-visitors">--</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-12 fade-up" id="latest-event">
+            <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <p class="uppercase tracking-[0.24em] text-xs font-semibold text-accent">Latest Event</p>
+                        <h2 class="text-2xl font-display font-semibold" id="latest-event-title">Waiting for events...</h2>
+                    </div>
+                    <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Live</span>
+                </div>
+                <div class="mt-2 text-sm text-slate-500" id="latest-event-meta">--</div>
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
+                    <a class="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700/50 dark:text-slate-200" id="latest-event-link" href="#" target="_blank">Open Event</a>
+                    <span class="text-sm text-slate-500" id="latest-event-id">ID: --</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-12 fade-up" id="recent-events">
+            <div class="max-w-2xl">
+                <p class="uppercase tracking-[0.24em] text-xs font-semibold text-accent">Recent Events</p>
+                <h2 class="mt-2 text-2xl font-display font-semibold">Latest listings fetched</h2>
+                <p class="mt-2 text-sm text-slate-500">A quick snapshot of the most recently pulled events.</p>
+            </div>
+            <div class="mt-5 grid gap-3" id="recent-events-list">
+                <div class="flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                    <div>
+                        <div class="font-semibold">Waiting for fetched events...</div>
+                        <div class="text-sm text-slate-500">--</div>
+                    </div>
+                    <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Pending</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-16 fade-up" id="features">
+            <div class="max-w-2xl">
+                <p class="uppercase tracking-[0.24em] text-xs font-semibold text-accent">Features</p>
+                <h2 class="mt-2 text-3xl font-display font-semibold">Built to report, alert, and prove value fast.</h2>
+                <p class="mt-3 text-sm text-slate-500">A client-friendly experience that pairs operational reliability with clear, real-time insights.</p>
+            </div>
+            <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                    <h3 class="font-semibold">Real-time tracking</h3>
+                    <p class="mt-2 text-sm text-slate-500">Automatic scans detect new listings and changes, with timestamps for proof and reporting.</p>
+                </div>
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                    <h3 class="font-semibold">Instant Telegram alerts</h3>
+                    <p class="mt-2 text-sm text-slate-500">Primary notification channel with fast delivery, plus admin-only heartbeats.</p>
+                </div>
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                    <h3 class="font-semibold">Diagnostics dashboard</h3>
+                    <p class="mt-2 text-sm text-slate-500">SMTP errors, queue health, and API status are surfaced for immediate action.</p>
+                </div>
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                    <h3 class="font-semibold">Daily summaries</h3>
+                    <p class="mt-2 text-sm text-slate-500">Automated daily digest with total events tracked and recipients served.</p>
+                </div>
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                    <h3 class="font-semibold">Export-ready data</h3>
+                    <p class="mt-2 text-sm text-slate-500">JSON and CSV export for reporting, analysis, and client documentation.</p>
+                </div>
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                    <h3 class="font-semibold">Admin controls</h3>
+                    <p class="mt-2 text-sm text-slate-500">Secure access to sensitive actions with rate limiting and session protection.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-16 grid gap-10 lg:grid-cols-[1.1fr_0.9fr] fade-up" id="reliability">
+            <div>
+                <p class="uppercase tracking-[0.24em] text-xs font-semibold text-accent">Reliability</p>
+                <h2 class="mt-2 text-3xl font-display font-semibold">Always-on monitoring with smart retries.</h2>
+                <p class="mt-3 text-sm text-slate-500">Telegram handles instant delivery. Email fallback queues failures, retries automatically, and surfaces diagnostics for transparency.</p>
+                <div class="mt-6 grid gap-3 sm:grid-cols-2">
+                    <div class="flex items-center gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                        <i class="bi bi-search text-xl text-accent"></i>
+                        <div>
+                            <div class="font-semibold">Scan</div>
+                            <div class="text-sm text-slate-500">Every 15 minutes</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                        <i class="bi bi-telegram text-xl text-accent"></i>
+                        <div>
+                            <div class="font-semibold">Alert</div>
+                            <div class="text-sm text-slate-500">Instant Telegram</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                        <i class="bi bi-envelope text-xl text-accent"></i>
+                        <div>
+                            <div class="font-semibold">Fallback</div>
+                            <div class="text-sm text-slate-500">Email retry queue</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                        <i class="bi bi-bar-chart text-xl text-accent"></i>
+                        <div>
+                            <div class="font-semibold">Report</div>
+                            <div class="text-sm text-slate-500">Daily summary</div>
+                        </div>
+                    </div>
+                </div>
+                <ul class="mt-6 space-y-2 text-sm text-slate-500">
+                    <li>Automatic retry queue with priority levels</li>
+                    <li>Heartbeat monitoring for long-running uptime</li>
+                    <li>Live API diagnostics and response metrics</li>
+                </ul>
+            </div>
+            <div class="rounded-3xl border border-emerald-600/20 bg-gradient-to-br from-emerald-600/10 to-sky-400/10 p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                <h3 class="text-xl font-display font-semibold">Client-ready reporting</h3>
+                <p class="mt-2 text-sm text-slate-500">Clear stats, exported logs, and visual dashboards make it easy to present outcomes.</p>
+                <div class="mt-6 flex gap-6">
+                    <div>
+                        <div class="text-2xl font-semibold">50+</div>
+                        <div class="text-sm text-slate-500">Recent events shown</div>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-semibold">3</div>
+                        <div class="text-sm text-slate-500">Notification paths</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-16 rounded-3xl bg-slate-900 px-6 py-10 text-white fade-up" id="security">
+            <div class="max-w-2xl">
+                <p class="uppercase tracking-[0.24em] text-xs font-semibold text-emerald-300">Security</p>
+                <h2 class="mt-2 text-3xl font-display font-semibold">Admin access that is intentional and protected.</h2>
+                <p class="mt-3 text-sm text-slate-300">Session-based admin login, rate limiting, and safe defaults reduce exposure.</p>
+            </div>
+            <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div class="rounded-2xl bg-white/10 p-5">
+                    <h3 class="font-semibold">Session logins</h3>
+                    <p class="mt-2 text-sm text-slate-300">Admin actions require login, with short-lived sessions and secure cookies.</p>
+                </div>
+                <div class="rounded-2xl bg-white/10 p-5">
+                    <h3 class="font-semibold">Rate limiting</h3>
+                    <p class="mt-2 text-sm text-slate-300">Block high-volume attempts to reduce brute-force and abusive traffic.</p>
+                </div>
+                <div class="rounded-2xl bg-white/10 p-5">
+                    <h3 class="font-semibold">Sanitized inputs</h3>
+                    <p class="mt-2 text-sm text-slate-300">Inputs are cleaned and validated before they touch storage or logic.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-16 flex flex-col items-start justify-between gap-6 rounded-3xl border border-black/5 bg-white p-8 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80 md:flex-row md:items-center" id="contact">
+            <div>
+                <h2 class="text-2xl font-display font-semibold">Want a live demo?</h2>
+                <p class="mt-2 text-sm text-slate-500">See real-time tracking, daily summaries, and export-ready reports — tailored for your needs.</p>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <a class="rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-5 py-2 text-sm font-semibold text-white shadow-glow" href="/login">Request Admin Walkthrough</a>
+                <a class="rounded-full border border-accent/40 px-5 py-2 text-sm font-semibold text-accent" href="/api/export-events?format=csv">Download Sample Report</a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="py-8 text-center text-sm text-slate-500">
+        <div>Dubai Flea Market Intelligence</div>
+        <div>Trusted monitoring and alerting | {{ current_year }}</div>
+    </footer>
+
+    <script>
+        function setTheme(theme) {
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            const button = document.getElementById('theme-toggle');
+            if (button) {
+                button.innerHTML = theme === 'dark'
+                    ? '<i class="bi bi-sun"></i>'
+                    : '<i class="bi bi-moon-stars"></i>';
+            }
+            localStorage.setItem('theme', theme);
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            setTheme(isDark ? 'light' : 'dark');
+        }
+
+        function toggleNav() {
+            const menu = document.getElementById('mobile-menu');
+            const toggle = document.getElementById('nav-toggle');
+            if (!menu || !toggle) return;
+            const isHidden = menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', !isHidden);
+            toggle.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        }
+
+        function closeNavOnClick() {
+            const menu = document.getElementById('mobile-menu');
+            const toggle = document.getElementById('nav-toggle');
+            if (!menu || !toggle) return;
+            menu.classList.add('hidden');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+
+        function closeNavOnOutsideClick(event) {
+            const menu = document.getElementById('mobile-menu');
+            const nav = document.getElementById('site-nav');
+            if (!menu || !nav) return;
+            if (menu.classList.contains('hidden')) return;
+            if (nav.contains(event.target) || menu.contains(event.target)) return;
+            closeNavOnClick();
+        }
+
+        const storedTheme = localStorage.getItem('theme');
+        setTheme(storedTheme || 'light');
+
+        function updateClientStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.config) {
+                        document.getElementById('metric-total-checks').textContent = data.config.total_checks ?? '--';
+                        document.getElementById('metric-emails').textContent = data.config.emails_sent ?? '--';
+                    }
+                    document.getElementById('metric-events').textContent = data.seen_count ?? '--';
+                    document.getElementById('metric-queue').textContent = data.email_queue_count ?? '--';
+
+                    if (data.latest_event) {
+                        const event = data.latest_event;
+                        document.getElementById('latest-event-title').textContent = event.title || 'Latest event';
+                        document.getElementById('latest-event-meta').textContent = event.first_seen ? `First seen: ${event.first_seen}` : 'First seen: --';
+                        document.getElementById('latest-event-id').textContent = event.id ? `ID: ${event.id}` : 'ID: --';
+                        const link = document.getElementById('latest-event-link');
+                        if (link) link.href = event.link || '#';
+                    }
+
+                    if (data.recent_events) {
+                        renderRecentEvents(data.recent_events);
+                    }
+
+                    if (data.visitor_stats) {
+                        document.getElementById('metric-visitors').textContent = data.visitor_stats.last_24h ?? '--';
+                    }
+                })
+                .catch(() => {});
+        }
+
+        function renderRecentEvents(events) {
+            const list = document.getElementById('recent-events-list');
+            if (!list) return;
+
+            if (!Array.isArray(events) || events.length === 0) {
+                list.innerHTML = '<div class="flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80"><div><div class="font-semibold">No events yet</div><div class="text-sm text-slate-500">Waiting for the next fetch cycle</div></div><span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Pending</span></div>';
+                return;
+            }
+
+            const rows = events.slice(0, 6).map(event => {
+                const title = escapeHtml(event.title || 'New event');
+                const meta = escapeHtml(event.first_seen || 'First seen: --');
+                const link = event.link || '#';
+                return `
+                    <a class="flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-white p-4 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80" href="${link}" target="_blank" rel="noopener">
+                        <div>
+                            <div class="font-semibold">${title}</div>
+                            <div class="text-sm text-slate-500">${meta}</div>
+                        </div>
+                        <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">View</span>
+                    </a>
+                `;
+            }).join('');
+
+            list.innerHTML = rows;
+        }
+
+        function updateClientFeed() {
+            fetch('/api/console')
+                .then(response => response.json())
+                .then(data => {
+                    const feed = document.getElementById('live-feed-body');
+                    if (!feed || !data.console) return;
+
+                    const iconMap = {
+                        'scan': 'bi-search',
+                        'check': 'bi-check-circle',
+                        'event': 'bi-calendar-event',
+                        'telegram': 'bi-telegram',
+                        'email': 'bi-envelope-check',
+                        'heartbeat': 'bi-heart-pulse',
+                        'alert': 'bi-bell',
+                        'error': 'bi-exclamation-triangle',
+                        'success': 'bi-patch-check',
+                        'api': 'bi-globe',
+                        'queue': 'bi-inbox',
+                        'data': 'bi-database-check',
+                        'security': 'bi-shield-check'
+                    };
+
+                    function pickIcon(msg) {
+                        const lower = (msg || '').toLowerCase();
+                        if (lower.includes('scan') || lower.includes('checking')) return iconMap.scan;
+                        if (lower.includes('telegram')) return iconMap.telegram;
+                        if (lower.includes('heartbeat') || lower.includes('pulse')) return iconMap.heartbeat;
+                        if (lower.includes('email') || lower.includes('mail')) return iconMap.email;
+                        if (lower.includes('event') || lower.includes('listing')) return iconMap.event;
+                        if (lower.includes('alert') || lower.includes('notify')) return iconMap.alert;
+                        if (lower.includes('error') || lower.includes('fail')) return iconMap.error;
+                        if (lower.includes('queue')) return iconMap.queue;
+                        if (lower.includes('api') || lower.includes('response')) return iconMap.api;
+                        if (lower.includes('save') || lower.includes('data') || lower.includes('snapshot')) return iconMap.data;
+                        if (lower.includes('security') || lower.includes('auth')) return iconMap.security;
+                        if (lower.includes('success') || lower.includes('ok')) return iconMap.success;
+                        return iconMap.check;
+                    }
+
+                    const rows = data.console.slice(0, 6).map(log => {
+                        const timeLabel = log.time_short || '--:--';
+                        const icon = pickIcon(log.msg);
+                        const safeMsg = escapeHtml(log.msg);
+                        return `
+                            <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
+                                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi ${icon}"></i></span>
+                                <span class="min-w-0 flex-1">${safeMsg}</span>
+                                <span class="text-xs text-slate-500">${timeLabel}</span>
+                            </div>
+                        `;
+                    }).join('');
+                    feed.innerHTML = rows;
+                })
+                .catch(() => {});
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/[&<>"']/g, function(match) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match];
+            });
+        }
+
+        updateClientStatus();
+        updateClientFeed();
+        setInterval(updateClientStatus, 15000);
+        setInterval(updateClientFeed, 8000);
+
+        document.querySelectorAll('#mobile-menu a').forEach(link => {
+            link.addEventListener('click', closeNavOnClick);
+        });
+
+        document.addEventListener('click', closeNavOnOutsideClick);
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 1024) closeNavOnClick();
+        });
+    </script>
+</body>
+</html>

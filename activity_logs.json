@@ -1,80 +1,602 @@
 [
   {
-    "timestamp": "2026-01-30T14:19:17.542359+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 02:19 PM",
-    "message": "\u2728 No new events found",
-    "level": "info"
+    "timestamp": "2026-02-08T17:19:38.207246+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:19 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   },
   {
-    "timestamp": "2026-01-30T14:19:17.541146+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 02:19 PM",
-    "message": "\ud83d\udce1 Fetched 6 events from API",
-    "level": "info"
+    "timestamp": "2026-02-08T17:19:19.369026+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:19 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   },
   {
-    "timestamp": "2026-01-30T14:19:15.643548+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 02:19 PM",
-    "message": "\ud83d\udd0d Starting event check...",
-    "level": "info"
+    "timestamp": "2026-02-08T17:19:01.793804+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:19 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   },
   {
-    "timestamp": "2026-01-30T14:04:15.018043+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 02:04 PM",
-    "message": "\u2728 No new events found",
-    "level": "info"
+    "timestamp": "2026-02-08T17:18:44.067174+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:18 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   },
   {
-    "timestamp": "2026-01-30T14:04:15.016830+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 02:04 PM",
-    "message": "\ud83d\udce1 Fetched 6 events from API",
-    "level": "info"
+    "timestamp": "2026-02-08T17:18:26.265070+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:18 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   },
   {
-    "timestamp": "2026-01-30T14:04:12.343418+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 02:04 PM",
-    "message": "\ud83d\udd0d Starting event check...",
-    "level": "info"
+    "timestamp": "2026-02-08T17:18:08.059251+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:18 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   },
   {
-    "timestamp": "2026-01-30T14:04:12.341719+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 02:04 PM",
-    "message": "\ud83d\ude80 Background checker started",
-    "level": "success"
+    "timestamp": "2026-02-08T17:17:49.832743+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:17 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   },
   {
-    "timestamp": "2026-01-30T13:55:15.409589+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
-    "message": "Email credentials not configured",
-    "level": "error"
+    "timestamp": "2026-02-08T17:17:30.963930+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:17 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   },
   {
-    "timestamp": "2026-01-30T13:55:15.408457+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "timestamp": "2026-02-08T17:17:12.749729+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:17 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:16:54.560991+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:16 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:16:37.011756+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:16 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:16:18.137781+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:16 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:15:59.932180+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:15 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:15:41.716109+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:15 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:15:24.119336+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:15 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:15:05.864306+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:15 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:14:47.667653+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:14 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:14:30.706677+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:14 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:14:11.829105+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:14 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:13:53.609258+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:13 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:13:35.397731+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:13 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:13:16.524004+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:13 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:12:58.292298+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:12 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:12:40.053067+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:12 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:12:21.231900+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:12 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:12:03.618915+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:12 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:11:46.052559+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:11 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:11:27.852326+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:11 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:11:09.031697+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:11 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:10:51.443506+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:10 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:10:33.256715+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:10 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:10:14.371277+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:10 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:09:56.087388+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:09 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:09:38.513002+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:09 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:09:20.308172+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:09 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:09:02.085085+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:09 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:08:44.461197+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:08 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:08:26.885123+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:08 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:08:09.898881+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:08 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:07:51.609024+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:07 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:07:34.058950+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:07 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:07:15.889228+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:07 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:06:58.318585+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:06 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:06:40.119987+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:06 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:06:23.192383+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:06 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:06:04.983868+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:06 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:05:46.774413+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:05 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:05:29.816361+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:05 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:05:12.238772+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:05 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:04:54.663681+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:04 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:04:37.659797+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:04 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:04:20.086836+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:04 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:04:01.879447+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:04 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:03:43.671226+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:03 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:03:24.734974+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:03 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:03:07.718285+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:03 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:02:50.103416+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:02 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:02:31.880576+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:02 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:02:14.293951+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:02 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:01:56.674963+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:01 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:01:39.084535+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:01 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:01:21.372227+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:01 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:01:03.143531+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:01 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:00:44.908546+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:00 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:00:26.712271+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:00 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T17:00:08.512034+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:00 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:59:50.293653+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:59 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:59:32.667765+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:59 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:59:13.821829+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:59 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:58:55.610491+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:58 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:58:37.370067+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:58 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:58:19.155872+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:58 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:58:00.961061+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:58 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:57:42.698209+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:57 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:57:24.452004+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:57 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:57:06.867752+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:57 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:56:48.657755+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:56 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:56:30.442380+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:56 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:56:13.492751+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:56 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:55:56.514530+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:55 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:55:37.702688+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:55 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:55:20.097931+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:55 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:55:02.470732+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:55 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:54:44.266464+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:54 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:54:26.069146+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:54 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:54:07.861974+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:54 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:53:49.688909+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:53 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:53:30.855013+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:53 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:53:13.195607+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:53 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:52:55.596777+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:52 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:52:38.031057+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:52 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:52:20.418062+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:52 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:52:02.814294+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:52 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:51:44.642391+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:51 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
+    "timestamp": "2026-02-08T16:51:27.578671+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:51 PM",
     "message": "\ud83d\udc93 Sending scheduled heartbeat...",
     "level": "info"
   },
   {
-    "timestamp": "2026-01-30T13:55:15.399334+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "timestamp": "2026-02-08T16:51:27.566493+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:51 PM",
     "message": "\u2728 No new events found",
     "level": "info"
   },
   {
-    "timestamp": "2026-01-30T13:55:15.398396+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
-    "message": "\ud83d\udce1 Fetched 6 events from API",
+    "timestamp": "2026-02-08T16:51:27.563985+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:51 PM",
+    "message": "\ud83d\udce1 Fetched 4 events from API",
     "level": "info"
   },
   {
-    "timestamp": "2026-01-30T13:55:13.361896+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
+    "timestamp": "2026-02-08T16:51:25.398818+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:51 PM",
     "message": "\ud83d\udd0d Starting event check...",
     "level": "info"
   },
   {
-    "timestamp": "2026-01-30T13:55:13.360602+00:00",
-    "timestamp_formatted": "Jan 30, 2026 at 01:55 PM",
-    "message": "\ud83d\ude80 Background checker started",
-    "level": "success"
+    "timestamp": "2026-02-08T16:36:24.906478+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:36 PM",
+    "message": "Error in checker (1/5): maximum recursion depth exceeded",
+    "level": "error"
+  },
+  {
+    "timestamp": "2026-02-08T16:36:24.664994+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 04:36 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
   }
 ]

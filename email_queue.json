@@ -1,0 +1,502 @@
+[
+  {
+    "subject": "\ud83d\udc93 Bot Running OK - Check #1 | 14:08 UTC",
+    "body": "\n============================================================\n\ud83d\udc93 DUBAI FLEA MARKET BOT - HEARTBEAT STATUS\n============================================================\n\n\u2705 STATUS: Bot is RUNNING and monitoring for new events!\n\n\ud83d\udcca CURRENT STATS:\n   \u2022 Check Number: #1\n   \u2022 Current Time (UTC): February 08, 2026 at 02:08:27 PM\n   \u2022 Events Already Seen: 9\n   \u2022 Total New Events Found: 0\n   \u2022 Emails Sent: 0\n\n\u23f0 TIMING INFO:\n   \u2022 Check Interval: Every 15 minutes\n   \u2022 Heartbeat Interval: Every 3 hours\n   \u2022 Uptime Since: 2026-02-08T14:08:25.630533+00:00\n\n\ud83c\udfaf The bot is actively running 24/7!\n\n\ud83d\udd17 Manual Check: https://dubai-fleamarket.com\n\n============================================================\n\ud83e\udd16 Automated Heartbeat from Dubai Flea Market Tracker\n============================================================\n",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:08:46.543971+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:38:46.543971+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:09:04.776328+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:39:04.776328+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:09:21.773337+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:39:21.773337+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:09:39.438210+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:39:39.438210+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:09:57.668644+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:39:57.668644+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:10:15.290262+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:40:15.290262+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:10:34.113356+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:40:34.113356+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:10:51.747607+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:40:51.747607+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:11:09.932622+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:41:09.932622+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:11:28.795677+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:41:28.795677+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:11:47.001551+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:41:47.001551+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:12:05.856575+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:42:05.856575+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:12:24.702494+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:42:24.702494+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:12:42.914380+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:42:42.914380+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:13:00.493696+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:43:00.493696+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:13:19.343588+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:43:19.343588+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:13:37.535371+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:43:37.535371+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:13:55.784707+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:43:55.784707+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:14:14.653592+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:44:14.653592+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:14:32.247020+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:44:32.247020+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:14:49.784547+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:44:49.784547+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:15:08.641675+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:45:08.641675+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:15:26.888781+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:45:26.888781+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:15:44.488029+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:45:44.488029+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:16:03.361490+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:46:03.361490+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:16:22.266871+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:46:22.266871+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:16:41.120127+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:46:41.120127+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:16:58.779380+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:46:58.779380+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:17:17.582851+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:47:17.582851+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:17:35.187735+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:47:35.187735+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:17:52.838065+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:47:52.838065+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:18:09.847350+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:48:09.847350+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:18:28.068588+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:48:28.068588+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:18:46.280893+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:48:46.280893+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:19:05.137155+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:49:05.137155+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:19:23.433065+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:49:23.433065+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:19:42.272609+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:49:42.272609+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:20:00.460125+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:50:00.460125+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:20:18.703253+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:50:18.703253+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:20:35.733030+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:50:35.733030+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:20:54.583596+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:50:54.583596+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:21:13.470678+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:51:13.470678+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:21:31.742290+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:51:31.742290+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:21:49.955226+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:51:49.955226+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:22:08.201039+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:52:08.201039+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:22:27.101837+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:52:27.101837+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:22:45.360877+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:52:45.360877+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:23:04.206178+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:53:04.206178+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:23:23.041663+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:53:23.041663+00:00",
+    "priority": "normal",
+    "last_error": null
+  },
+  {
+    "subject": "Email Delivery Issue",
+    "body": "Email failed and queued for retry: st***ub@gmail.com",
+    "recipient": "steevenparubrub@gmail.com",
+    "created_at": "2026-02-08T14:23:40.066143+00:00",
+    "attempts": 0,
+    "next_retry": "2026-02-08T14:53:40.066143+00:00",
+    "priority": "normal",
+    "last_error": null
+  }
+]

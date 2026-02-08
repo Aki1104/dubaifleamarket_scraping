@@ -38,6 +38,7 @@ This is an **automated event monitoring bot** that watches the Dubai Flea Market
 |-----------|------------|---------|
 | Backend | Python 3.11 + Flask | Web server & API |
 | Frontend | HTML/CSS/JS | Admin dashboard |
+| Typography | Space Grotesk + IBM Plex Sans | Visual hierarchy & readability |
 | Hosting | Render.com (Free) | 24/7 cloud hosting |
 | Notifications | Telegram Bot API | Instant free messages |
 | Keep-Alive | UptimeRobot | Prevents Render spin-down |
@@ -77,6 +78,9 @@ This is an **automated event monitoring bot** that watches the Dubai Flea Market
 ### Appearance
 - 🌙 Dark/Light theme toggle
 - 📱 Mobile responsive design
+- 🧭 Clear text hierarchy (display headings + readable body font)
+- 🧩 Refined spacing system (consistent margins, padding, and card density)
+- 🎨 Layered background + updated color palette for better focus
 - 🔔 Browser notifications
 
 ---
@@ -171,4 +175,4 @@ MIT License - Feel free to modify and use for your own projects!
 
 ---
 
-*Last updated: January 2026*
+*Last updated: February 2026*
