@@ -1,5 +1,11 @@
 [
   {
+    "timestamp": "2026-02-08T17:20:14.044987+00:00",
+    "timestamp_formatted": "Feb 08, 2026 at 05:20 PM",
+    "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
+    "level": "warning"
+  },
+  {
     "timestamp": "2026-02-08T17:19:56.443739+00:00",
     "timestamp_formatted": "Feb 08, 2026 at 05:19 PM",
     "message": "\ud83d\udcec Email queued for retry to st***ub@gmail.com",
@@ -592,11 +598,5 @@
     "timestamp_formatted": "Feb 08, 2026 at 04:51 PM",
     "message": "\ud83d\udd0d Starting event check...",
     "level": "info"
-  },
-  {
-    "timestamp": "2026-02-08T16:36:24.906478+00:00",
-    "timestamp_formatted": "Feb 08, 2026 at 04:36 PM",
-    "message": "Error in checker (1/5): maximum recursion depth exceeded",
-    "level": "error"
   }
 ]
