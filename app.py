@@ -183,7 +183,7 @@ def validate_url(url):
             return False
         domain = url.split('/')[2].lower()
         return any(domain == allowed or domain.endswith('.' + allowed) for allowed in allowed_domains)
-    except:
+    except Exception:
         return False
 
 def mask_email(email):
@@ -410,7 +410,7 @@ def process_email_queue():
     console_log(f"📬 Processing email queue: {len(EMAIL_QUEUE)} pending", "info")
     
     for item in EMAIL_QUEUE[:]:  # Iterate over copy
-        created = datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
+        created = parse_iso_timestamp(item['created_at'])
         age_hours = (now - created).total_seconds() / 3600
         
         # Remove if too old
@@ -422,7 +422,7 @@ def process_email_queue():
             continue
         
         # Check if it's time to retry
-        next_retry = datetime.fromisoformat(item['next_retry'].replace('Z', '+00:00'))
+        next_retry = parse_iso_timestamp(item['next_retry'])
         if now < next_retry:
             continue
         
@@ -541,7 +541,7 @@ def load_theme_settings():
         try:
             with open(THEME_FILE, 'r') as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     return {'theme': 'dark', 'notifications_enabled': False}
 
@@ -653,7 +653,7 @@ def parse_iso_timestamp(iso_string: str) -> datetime:
     """Parse ISO 8601 timestamp string to datetime, handling 'Z' suffix."""
     if not iso_string:
         raise ValueError("Empty timestamp")
-    return datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
+    return parse_iso_timestamp(iso_string)
 
 
 # ===== RECIPIENT STATUS MANAGEMENT =====
@@ -663,7 +663,7 @@ def load_recipient_status():
         try:
             with open(RECIPIENT_STATUS_FILE, 'r') as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     
     # Initialize all recipients as enabled
@@ -695,7 +695,7 @@ def load_email_history():
                 history = json.load(f)
                 if isinstance(history, list):
                     return history
-        except:
+        except Exception:
             pass
     return []
 
@@ -731,9 +731,9 @@ def add_to_email_history(recipient, subject, success, error_msg=''):
 def format_timestamp(iso_string):
     """Format ISO timestamp to readable format like 'Jan 30, 2026 at 02:45 PM'."""
     try:
-        dt = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
+        dt = parse_iso_timestamp(iso_string)
         return dt.strftime('%b %d, %Y at %I:%M %p')
-    except:
+    except Exception:
         return iso_string[:16] if iso_string else '--'
 
 def format_hour_offset(base_hour, offset_hours):
@@ -866,7 +866,7 @@ def load_logs():
         if os.path.exists(LOGS_FILE):
             with open(LOGS_FILE, 'r') as f:
                 ACTIVITY_LOGS = json.load(f)
-    except:
+    except Exception:
         ACTIVITY_LOGS = []
 
 def load_status():
@@ -875,7 +875,7 @@ def load_status():
         try:
             with open(STATUS_FILE, 'r') as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     return {'last_daily_summary': None, 'total_checks': 0, 'last_heartbeat': None, 'last_check_time': None}
 
@@ -916,7 +916,7 @@ def load_seen_events():
                 if isinstance(data, list):
                     return {'event_ids': data, 'event_details': []}
                 return data
-        except:
+        except Exception:
             pass
     return {'event_ids': [], 'event_details': []}
 
@@ -1183,7 +1183,7 @@ def send_telegram(message, chat_id=None):
                 resp_data = {}
                 try:
                     resp_data = response.json()
-                except:
+                except Exception:
                     pass
                 error_desc = resp_data.get('description', response.text[:80])
                 last_error = f"HTTP {response.status_code}: {error_desc}"
@@ -1328,7 +1328,7 @@ def send_telegram_heartbeat():
     
     now = datetime.now(timezone.utc)
     seen_data = load_seen_events()
-    uptime_start = datetime.fromisoformat(CONFIG['uptime_start'].replace('Z', '+00:00'))
+    uptime_start = parse_iso_timestamp(CONFIG['uptime_start'])
     uptime_delta = now - uptime_start
     uptime_hours = int(uptime_delta.total_seconds() // 3600)
     uptime_mins = int((uptime_delta.total_seconds() % 3600) // 60)
@@ -1461,7 +1461,7 @@ def send_telegram_daily_summary():
     seen_count = len(seen_data.get('event_ids', []))
     
     # Calculate uptime
-    uptime_start = datetime.fromisoformat(CONFIG['uptime_start'].replace('Z', '+00:00'))
+    uptime_start = parse_iso_timestamp(CONFIG['uptime_start'])
     uptime_delta = now - uptime_start
     uptime_days = uptime_delta.days
     uptime_hours = int((uptime_delta.total_seconds() % 86400) // 3600)
@@ -1670,11 +1670,11 @@ def should_send_heartbeat():
         return True
     
     try:
-        last_time = datetime.fromisoformat(last_heartbeat.replace('Z', '+00:00'))
+        last_time = parse_iso_timestamp(last_heartbeat)
         now = datetime.now(timezone.utc)
         hours_since = (now - last_time).total_seconds() / 3600
         return hours_since >= CONFIG['heartbeat_hours']
-    except:
+    except Exception:
         return True
 
 def background_checker():
@@ -1830,17 +1830,17 @@ def dashboard():
     next_check_seconds = 0
     if CONFIG['next_check']:
         try:
-            next_dt = datetime.fromisoformat(CONFIG['next_check'].replace('Z', '+00:00'))
+            next_dt = parse_iso_timestamp(CONFIG['next_check'])
             next_check_seconds = max(0, int((next_dt - now).total_seconds()))
-        except:
+        except Exception:
             pass
     
     next_heartbeat_seconds = 0
     if CONFIG['next_heartbeat']:
         try:
-            next_dt = datetime.fromisoformat(CONFIG['next_heartbeat'].replace('Z', '+00:00'))
+            next_dt = parse_iso_timestamp(CONFIG['next_heartbeat'])
             next_heartbeat_seconds = max(0, int((next_dt - now).total_seconds()))
-        except:
+        except Exception:
             pass
 
     recent_events = []
@@ -1858,7 +1858,7 @@ def dashboard():
     
     uptime_str = "Just started"
     try:
-        start = datetime.fromisoformat(CONFIG['uptime_start'].replace('Z', '+00:00'))
+        start = parse_iso_timestamp(CONFIG['uptime_start'])
         diff = now - start
         days = diff.days
         hours = diff.seconds // 3600
@@ -1869,7 +1869,7 @@ def dashboard():
             uptime_str = f"{hours}h {mins}m"
         else:
             uptime_str = f"{mins}m"
-    except:
+    except Exception:
         pass
     
     # Get recipient status
@@ -1972,17 +1972,17 @@ def api_status():
     next_check_seconds = 0
     if CONFIG['next_check']:
         try:
-            next_dt = datetime.fromisoformat(CONFIG['next_check'].replace('Z', '+00:00'))
+            next_dt = parse_iso_timestamp(CONFIG['next_check'])
             next_check_seconds = max(0, int((next_dt - now).total_seconds()))
-        except:
+        except Exception:
             pass
     
     next_heartbeat_seconds = 0
     if CONFIG['next_heartbeat']:
         try:
-            next_dt = datetime.fromisoformat(CONFIG['next_heartbeat'].replace('Z', '+00:00'))
+            next_dt = parse_iso_timestamp(CONFIG['next_heartbeat'])
             next_heartbeat_seconds = max(0, int((next_dt - now).total_seconds()))
-        except:
+        except Exception:
             pass
     
     return jsonify({
@@ -2172,7 +2172,7 @@ def diagnose_smtp():
                 add_step("IPv6 Available", "warning", f"IPv6 exists but may cause issues - IPv4 forcing is {'ON' if SMTP_USE_IPV4 else 'OFF'}")
                 if not SMTP_USE_IPV4:
                     results['recommendations'].append("IPv6 is available but may cause 'Network unreachable' errors. Set SMTP_USE_IPV4=true in environment")
-        except:
+        except Exception:
             add_step("IPv6 Available", "pass", "No IPv6 (good - avoids network issues)")
             
     except socket.gaierror as e:
@@ -2296,7 +2296,7 @@ def diagnose_smtp():
     
     try:
         server.quit()
-    except:
+    except Exception:
         pass
     
     # Summary
@@ -3121,6 +3121,69 @@ def notification_check():
         'last_check': datetime.now(timezone.utc).strftime('%b %d, %Y at %I:%M %p')
     })
 
+
+@app.route('/api/status-full')
+@rate_limit
+@require_admin
+def api_status_full():
+    """Consolidated polling endpoint: status + console + diagnostics + queue.
+    
+    Reduces dashboard from 4+ parallel AJAX calls to 1, cutting network overhead
+    and making the dashboard snappier.
+    """
+    status = load_status()
+    seen_data = load_seen_events()
+    now = datetime.now(timezone.utc)
+
+    next_check_seconds = 0
+    if CONFIG['next_check']:
+        try:
+            next_dt = parse_iso_timestamp(CONFIG['next_check'])
+            next_check_seconds = max(0, int((next_dt - now).total_seconds()))
+        except Exception:
+            pass
+
+    next_heartbeat_seconds = 0
+    if CONFIG['next_heartbeat']:
+        try:
+            next_dt = parse_iso_timestamp(CONFIG['next_heartbeat'])
+            next_heartbeat_seconds = max(0, int((next_dt - now).total_seconds()))
+        except Exception:
+            pass
+
+    checker_alive = checker_thread is not None and checker_thread.is_alive()
+
+    return jsonify({
+        'config': CONFIG,
+        'status': status,
+        'seen_count': len(seen_data.get('event_ids', [])),
+        'next_check_seconds': next_check_seconds,
+        'next_heartbeat_seconds': next_heartbeat_seconds,
+        'checker_running': checker_alive,
+        'email_queue': build_email_queue_payload(limit=10),
+        'latest_event': get_latest_event_summary(),
+        'logs': ACTIVITY_LOGS[:20],
+        'console': SYSTEM_CONSOLE[:100],
+        'check_history': CHECK_HISTORY[:20],
+        'diagnostics': {
+            **API_DIAGNOSTICS,
+            'email_provider': {
+                'primary': 'Telegram' if (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS) else 'Gmail SMTP',
+                'telegram_configured': bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS),
+                'telegram_admin_configured': bool(TELEGRAM_ADMIN_CHAT_ID),
+                'gmail_configured': bool(MY_EMAIL and MY_PASSWORD),
+            },
+            'last_smtp_error': CONFIG.get('last_smtp_error'),
+            'last_smtp_error_at': CONFIG.get('last_smtp_error_at')
+        },
+        'visitor_stats': {
+            'total': VISITOR_TOTAL,
+            'last_24h': len(VISITOR_LOG)
+        },
+        'timestamp': now.isoformat()
+    })
+
+
 # ===== STARTUP =====
 def start_background_checker():
     """Start the background checker thread."""
@@ -3180,6 +3243,14 @@ console_log(f"💓 Heartbeat: Every {CONFIG['heartbeat_hours']} hours", "debug")
 console_log(f"👥 Recipients configured: {len(get_all_recipients())}", "debug")
 console_log(f"📊 Event stats loaded: {len(EVENT_STATS.get('daily', {}))} days of data", "debug")
 console_log(f"📱 Telegram Admin: {'Configured' if TELEGRAM_ADMIN_CHAT_ID else 'Not set'}", "debug")
+
+# Security warnings
+if not ADMIN_PASSWORD:
+    console_log("🚨 WARNING: ADMIN_PASSWORD not set! Dashboard login will be disabled until set.", "error")
+    console_log("   └─ Set ADMIN_PASSWORD environment variable in Render dashboard or .env file", "error")
+if not CONFIG.get('heartbeat_email'):
+    console_log("⚠️ HEARTBEAT_EMAIL not set. Heartbeat emails will not be sent.", "warning")
+
 console_log("✅ System initialized successfully", "success")
 console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
 
