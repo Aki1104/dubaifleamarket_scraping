@@ -31,7 +31,17 @@ services:
       - key: HEARTBEAT_HOURS
         value: "3"
       - key: HEARTBEAT_EMAIL
-        sync: false  # Set manually in dashboard
+        sync: false  # Set manually in dashboard (optional if using Telegram)
+      # Telegram Bot (Recommended - see docs/telegram_chatid.md)
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false  # Get from @BotFather
+      - key: TELEGRAM_CHAT_IDS
+        sync: false  # Comma-separated IDs for event alerts (e.g., 8588848562)
+      - key: TELEGRAM_ADMIN_CHAT_ID
+        sync: false  # Single ID for admin alerts (e.g., 8588848562)
+      # Security
+      - key: ADMIN_PASSWORD
+        sync: false  # REQUIRED - set a strong password
       # Check Interval
       - key: CHECK_INTERVAL
         value: "15"

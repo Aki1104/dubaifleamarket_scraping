@@ -158,7 +158,7 @@ def api_events():
     return jsonify({'events': events})
 
 # ===== SECURITY: Input Validation =====
-def sanitize_string(text, max_length=500):
+def sanitize_string(text, max_length: int = 500) -> str:
     """Sanitize and validate string input."""
     if not isinstance(text, str):
         return str(text)[:max_length] if text is not None else ''
@@ -166,14 +166,14 @@ def sanitize_string(text, max_length=500):
     text = re.sub(r'[<>"\';]|--|\bOR\b|\bAND\b|\bUNION\b|\bSELECT\b|\bDROP\b|\bINSERT\b|\bDELETE\b', '', text, flags=re.IGNORECASE)
     return text.strip()[:max_length]
 
-def validate_email(email):
+def validate_email(email: str) -> bool:
     """Validate email format."""
     if not email or not isinstance(email, str):
         return False
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email)) and len(email) <= 254
 
-def validate_url(url):
+def validate_url(url: str) -> bool:
     """Validate URL is from expected domain."""
     if not url or not isinstance(url, str):
         return False
@@ -186,7 +186,7 @@ def validate_url(url):
     except Exception:
         return False
 
-def mask_email(email):
+def mask_email(email: str) -> str:
     """Mask email - show only first 2 and last 2 letters."""
     if not email or '@' not in email:
         return '***'
@@ -203,7 +203,7 @@ def mask_email(email):
 # ===== SECURITY: Password Protection =====
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
 
-def verify_password(password):
+def verify_password(password: str) -> bool:
     """Verify admin password."""
     if not password:
         return False
@@ -570,7 +570,7 @@ def set_last_smtp_error(message):
     CONFIG['last_smtp_error'] = message
     CONFIG['last_smtp_error_at'] = datetime.now(timezone.utc).isoformat()
 
-def console_log(message, log_type="info"):
+def console_log(message: str, log_type: str = "info") -> None:
     """Add detailed log to system console - terminal style. Thread-safe."""
     global SYSTEM_CONSOLE
     now = datetime.now(timezone.utc)
@@ -728,7 +728,7 @@ def add_to_email_history(recipient, subject, success, error_msg=''):
     history.append(entry)
     save_email_history(history)
 
-def format_timestamp(iso_string):
+def format_timestamp(iso_string: str) -> str:
     """Format ISO timestamp to readable format like 'Jan 30, 2026 at 02:45 PM'."""
     try:
         dt = parse_iso_timestamp(iso_string)
@@ -736,7 +736,7 @@ def format_timestamp(iso_string):
     except Exception:
         return iso_string[:16] if iso_string else '--'
 
-def format_hour_offset(base_hour, offset_hours):
+def format_hour_offset(base_hour, offset_hours) -> str:
     """Format a UTC hour with offset as a local HH:00 AM/PM string."""
     try:
         local_hour = (int(base_hour) + int(offset_hours)) % 24
@@ -749,13 +749,13 @@ def format_hour_offset(base_hour, offset_hours):
         return '--'
 
 # ===== HELPER FUNCTIONS =====
-def get_all_recipients():
+def get_all_recipients() -> list:
     """Get all configured recipients."""
     if not TO_EMAIL:
         return []
     return [e.strip() for e in TO_EMAIL.split(',') if e.strip() and validate_email(e.strip())]
 
-def get_recipients():
+def get_recipients() -> list:
     """Get enabled recipients only."""
     all_recipients = get_all_recipients()
     return [e for e in all_recipients if is_recipient_enabled(e)]
@@ -821,7 +821,7 @@ def log_admin_action(action, details=None):
 
 _admin_alert_in_progress = False  # Guard against infinite recursion
 
-def notify_admin_alert(message, subject='Admin Alert'):
+def notify_admin_alert(message: str, subject: str = 'Admin Alert') -> bool:
     """Best-effort admin alert via Telegram to ADMIN ONLY.
     
     Error/status messages are sent ONLY to TELEGRAM_ADMIN_CHAT_ID.
@@ -907,7 +907,7 @@ def mark_daily_summary_sent():
     status['last_daily_summary'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     save_status(status)
 
-def load_seen_events():
+def load_seen_events() -> dict:
     """Load seen events."""
     if os.path.exists(DB_FILE):
         try:
@@ -920,17 +920,16 @@ def load_seen_events():
             pass
     return {'event_ids': [], 'event_details': []}
 
-def save_seen_events(seen_data):
+def save_seen_events(seen_data: dict) -> None:
     """Save seen events atomically."""
     try:
         atomic_json_write(DB_FILE, seen_data)
     except Exception as e:
         log_activity(f"Failed to save events: {e}", "error")
 
-def fetch_events():
+def fetch_events() -> list | None:
     """Fetch events from API with detailed diagnostics."""
     global API_DIAGNOSTICS
-    import time
     
     start_time = time.time()
     API_DIAGNOSTICS['last_request_time'] = datetime.now(timezone.utc).isoformat()
@@ -1143,7 +1142,7 @@ def get_admin_chat_id():
             return first_id
     return None
 
-def send_telegram(message, chat_id=None):
+def send_telegram(message: str, chat_id: str = None) -> tuple:
     """Send message via Telegram Bot to specified chat_id(s).
     
     If chat_id is given, sends only to that ID.
@@ -1246,7 +1245,7 @@ def send_telegram_to_subscribers(message):
         return True, None
     return False, last_error
 
-def send_telegram_new_events(events):
+def send_telegram_new_events(events: list) -> bool:
     """Send new event notification via Telegram to ALL subscribers + admin.
     
     New events are NON-ERROR messages, so they go to everyone.
@@ -1309,7 +1308,7 @@ def send_telegram_new_events(events):
         notify_admin_alert(f"Telegram failed for new event alerts: {error}", "Telegram Alert Failure")
     return success
 
-def send_telegram_heartbeat():
+def send_telegram_heartbeat() -> bool:
     """Send heartbeat via Telegram to ADMIN ONLY (not all subscribers).
     
     Heartbeats are admin-only status messages. Regular subscribers
@@ -1550,7 +1549,7 @@ def send_daily_summary_email():
 
     return success_count > 0
 
-def check_for_events():
+def check_for_events() -> None:
     """Main event checking logic with detailed console logging."""
     console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
     console_log("🔍 STARTING EVENT CHECK CYCLE", "info")
@@ -1658,7 +1657,7 @@ def check_for_events():
     console_log(f"⏰ Next check scheduled: {next_check_time.strftime('%H:%M:%S UTC')}", "info")
     console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
 
-def should_send_heartbeat():
+def should_send_heartbeat() -> bool:
     """Check if heartbeat is due."""
     if not CONFIG['heartbeat_enabled']:
         return False
@@ -1791,13 +1790,37 @@ def index():
     record_visit()
     return render_template('index.html', current_year=now.year)
 
+def _generate_csrf_token() -> str:
+    """Generate a CSRF token and store it in the session."""
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(32)
+    return session['_csrf_token']
+
+
+def _validate_csrf_token() -> bool:
+    """Validate the CSRF token from the form against the session."""
+    token = request.form.get('csrf_token', '')
+    expected = session.get('_csrf_token', '')
+    if not token or not expected:
+        return False
+    return secrets.compare_digest(token, expected)
+
+
 @app.route('/login', methods=['GET', 'POST'])
 @rate_limit
 def admin_login():
-    """Admin login page."""
+    """Admin login page with CSRF protection."""
     if request.method == 'GET':
         next_url = safe_next_url(request.args.get('next'))
-        return render_template('admin_login.html', error=None, next=next_url)
+        csrf_token = _generate_csrf_token()
+        return render_template('admin_login.html', error=None, next=next_url, csrf_token=csrf_token)
+
+    # Validate CSRF token
+    if not _validate_csrf_token():
+        console_log(f"🚫 CSRF validation failed from {get_client_ip()[:15]}", "warning")
+        next_url = safe_next_url(request.form.get('next'))
+        csrf_token = _generate_csrf_token()
+        return render_template('admin_login.html', error='Invalid request. Please try again.', next=next_url, csrf_token=csrf_token)
 
     password = request.form.get('password', '')
     next_url = safe_next_url(request.form.get('next'))
@@ -1809,7 +1832,8 @@ def admin_login():
         log_admin_action('admin_login', f"{request.method} {request.path}")
         return redirect(next_url)
 
-    return render_template('admin_login.html', error='Invalid password', next=next_url)
+    csrf_token = _generate_csrf_token()
+    return render_template('admin_login.html', error='Invalid password', next=next_url, csrf_token=csrf_token)
 
 @app.route('/logout')
 def admin_logout():
