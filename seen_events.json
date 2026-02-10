@@ -11,7 +11,8 @@
     8387,
     8647,
     8776,
-    8783
+    8783,
+    8787
   ],
   "event_details": [
     {
@@ -62,6 +63,13 @@
       "date_posted": "2026-02-10T14:38:13",
       "link": "https://dubai-fleamarket.com/product/zabeel-park-gate-1-gate-2-saturday-7-march-2026-aed295-vat/",
       "first_seen": "2026-02-10 11:14 UTC"
+    },
+    {
+      "id": 8787,
+      "title": "DIP 1 / The Market Mall / INDOOR / Sunday 22 February 2026 / AED295+Vat",
+      "date_posted": "2026-02-10T15:00:56",
+      "link": "https://dubai-fleamarket.com/product/dip-1-the-market-mall-indoor-sunday-22-february-2026-aed295vat/",
+      "first_seen": "2026-02-10 12:03 UTC"
     }
   ]
 }
