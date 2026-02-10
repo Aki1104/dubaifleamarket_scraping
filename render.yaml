@@ -31,7 +31,7 @@ services:
       - key: HEARTBEAT_HOURS
         value: "3"
       - key: HEARTBEAT_EMAIL
-        value: "steevenparubrub@gmail.com"
+        sync: false  # Set manually in dashboard
       # Check Interval
       - key: CHECK_INTERVAL
         value: "15"

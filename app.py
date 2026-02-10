@@ -201,7 +201,7 @@ def mask_email(email):
     return f"{masked_local}@{domain}"
 
 # ===== SECURITY: Password Protection =====
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
 
 def verify_password(password):
     """Verify admin password."""
@@ -288,7 +288,7 @@ CONFIG = {
     'check_interval_minutes': int(os.environ.get('CHECK_INTERVAL', '15')),
     'heartbeat_enabled': os.environ.get('HEARTBEAT_ENABLED', 'true').lower() == 'true',
     'heartbeat_hours': int(os.environ.get('HEARTBEAT_HOURS', '3')),
-    'heartbeat_email': os.environ.get('HEARTBEAT_EMAIL', 'steevenparubrub@gmail.com'),
+    'heartbeat_email': os.environ.get('HEARTBEAT_EMAIL', ''),
     'daily_summary_enabled': os.environ.get('DAILY_SUMMARY_ENABLED', 'true').lower() == 'true',
     'daily_summary_hour': int(os.environ.get('DAILY_SUMMARY_HOUR', '9')),
     'tracker_enabled': True,
@@ -359,10 +359,9 @@ def load_admin_audit_on_startup():
     ADMIN_AUDIT_LOGS = load_admin_audit()
 
 def save_email_queue():
-    """Save email queue to file."""
+    """Save email queue to file atomically."""
     try:
-        with open(EMAIL_QUEUE_FILE, 'w') as f:
-            json.dump(EMAIL_QUEUE, f, indent=2)
+        atomic_json_write(EMAIL_QUEUE_FILE, EMAIL_QUEUE)
     except Exception as e:
         console_log(f"⚠️ Failed to save email queue: {e}", "warning")
 
@@ -501,7 +500,7 @@ def load_event_stats():
     return EVENT_STATS
 
 def save_event_stats():
-    """Save event statistics to file."""
+    """Save event statistics to file atomically."""
     try:
         # Keep only last 30 days of daily stats and 48 hours of hourly stats
         now = datetime.now(timezone.utc)
@@ -511,8 +510,7 @@ def save_event_stats():
         EVENT_STATS['daily'] = {k: v for k, v in EVENT_STATS['daily'].items() if k >= cutoff_daily}
         EVENT_STATS['hourly'] = {k: v for k, v in EVENT_STATS['hourly'].items() if k >= cutoff_hourly}
         
-        with open(EVENT_STATS_FILE, 'w') as f:
-            json.dump(EVENT_STATS, f, indent=2)
+        atomic_json_write(EVENT_STATS_FILE, EVENT_STATS)
     except Exception as e:
         console_log(f"⚠️ Failed to save event stats: {e}", "warning")
 
@@ -548,10 +546,9 @@ def load_theme_settings():
     return {'theme': 'dark', 'notifications_enabled': False}
 
 def save_theme_settings(settings):
-    """Save theme settings."""
+    """Save theme settings atomically."""
     try:
-        with open(THEME_FILE, 'w') as f:
-            json.dump(settings, f, indent=2)
+        atomic_json_write(THEME_FILE, settings)
     except Exception as e:
         console_log(f"⚠️ Failed to save theme settings: {e}", "warning")
 
@@ -574,7 +571,7 @@ def set_last_smtp_error(message):
     CONFIG['last_smtp_error_at'] = datetime.now(timezone.utc).isoformat()
 
 def console_log(message, log_type="info"):
-    """Add detailed log to system console - terminal style."""
+    """Add detailed log to system console - terminal style. Thread-safe."""
     global SYSTEM_CONSOLE
     now = datetime.now(timezone.utc)
     timestamp = now.strftime('%b %d, %Y %I:%M:%S %p')
@@ -585,9 +582,10 @@ def console_log(message, log_type="info"):
         'type': log_type,  # info, success, error, warning, api, debug
         'msg': message
     }
-    SYSTEM_CONSOLE.insert(0, entry)
-    if len(SYSTEM_CONSOLE) > MAX_CONSOLE_LOGS:
-        SYSTEM_CONSOLE = SYSTEM_CONSOLE[:MAX_CONSOLE_LOGS]
+    with _data_lock:
+        SYSTEM_CONSOLE.insert(0, entry)
+        if len(SYSTEM_CONSOLE) > MAX_CONSOLE_LOGS:
+            SYSTEM_CONSOLE = SYSTEM_CONSOLE[:MAX_CONSOLE_LOGS]
     try:
         print(f"[CONSOLE][{log_type.upper()}] {message}")
     except (UnicodeEncodeError, UnicodeDecodeError):
@@ -624,6 +622,40 @@ def get_smtp_connection(timeout=30):
 checker_thread = None
 stop_checker = threading.Event()
 
+# Thread-safety lock for shared mutable state (CONFIG counters, logs, queues)
+_data_lock = threading.RLock()
+
+
+def atomic_json_write(filepath: str, data) -> None:
+    """Write JSON atomically: write to temp file then rename to avoid corruption."""
+    import tempfile
+    dir_name = os.path.dirname(filepath) or '.'
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(data, f, indent=2)
+            # On Windows, os.replace is atomic and overwrites existing
+            os.replace(tmp_path, filepath)
+        except Exception:
+            # Clean up temp file on failure
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+    except Exception as e:
+        console_log(f"⚠️ Atomic write failed for {os.path.basename(filepath)}: {e}", "warning")
+        raise
+
+
+def parse_iso_timestamp(iso_string: str) -> datetime:
+    """Parse ISO 8601 timestamp string to datetime, handling 'Z' suffix."""
+    if not iso_string:
+        raise ValueError("Empty timestamp")
+    return datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
+
+
 # ===== RECIPIENT STATUS MANAGEMENT =====
 def load_recipient_status():
     """Load recipient enabled/disabled status."""
@@ -643,10 +675,9 @@ def load_recipient_status():
     return status
 
 def save_recipient_status(status):
-    """Save recipient status."""
+    """Save recipient status atomically."""
     try:
-        with open(RECIPIENT_STATUS_FILE, 'w') as f:
-            json.dump(status, f, indent=2)
+        atomic_json_write(RECIPIENT_STATUS_FILE, status)
     except Exception as e:
         log_activity(f"Failed to save recipient status: {e}", "error")
 
@@ -669,10 +700,9 @@ def load_email_history():
     return []
 
 def save_email_history(history):
-    """Save email history."""
+    """Save email history atomically."""
     try:
-        with open(EMAIL_HISTORY_FILE, 'w') as f:
-            json.dump(history, f, indent=2)
+        atomic_json_write(EMAIL_HISTORY_FILE, history)
     except Exception as e:
         log_activity(f"Failed to save email history: {e}", "error")
 
@@ -730,8 +760,8 @@ def get_recipients():
     all_recipients = get_all_recipients()
     return [e for e in all_recipients if is_recipient_enabled(e)]
 
-def log_activity(message, level="info"):
-    """Add activity log entry."""
+def log_activity(message: str, level: str = "info") -> None:
+    """Add activity log entry. Thread-safe."""
     global ACTIVITY_LOGS
     now = datetime.now(timezone.utc)
     entry = {
@@ -740,15 +770,19 @@ def log_activity(message, level="info"):
         'message': sanitize_string(message, 200),
         'level': level
     }
-    ACTIVITY_LOGS.insert(0, entry)
-    if len(ACTIVITY_LOGS) > MAX_LOGS:
-        ACTIVITY_LOGS = ACTIVITY_LOGS[:MAX_LOGS]
+    with _data_lock:
+        ACTIVITY_LOGS.insert(0, entry)
+        if len(ACTIVITY_LOGS) > MAX_LOGS:
+            ACTIVITY_LOGS = ACTIVITY_LOGS[:MAX_LOGS]
+        logs_snapshot = ACTIVITY_LOGS[:]
     try:
-        with open(LOGS_FILE, 'w') as f:
-            json.dump(ACTIVITY_LOGS, f, indent=2)
-    except:
+        atomic_json_write(LOGS_FILE, logs_snapshot)
+    except Exception:
+        pass  # console_log already called inside atomic_json_write
+    try:
+        print(f"[{level.upper()}] {message}")
+    except (UnicodeEncodeError, UnicodeDecodeError):
         pass
-    print(f"[{level.upper()}] {message}")
 
 def load_admin_audit():
     """Load admin audit log from file."""
@@ -763,10 +797,9 @@ def load_admin_audit():
     return []
 
 def save_admin_audit(entries):
-    """Save admin audit log to file."""
+    """Save admin audit log to file atomically."""
     try:
-        with open(ADMIN_AUDIT_FILE, 'w') as f:
-            json.dump(entries, f, indent=2)
+        atomic_json_write(ADMIN_AUDIT_FILE, entries)
     except Exception as e:
         log_activity(f"Failed to save admin audit: {e}", "error")
 
@@ -786,18 +819,33 @@ def log_admin_action(action, details=None):
         ADMIN_AUDIT_LOGS = ADMIN_AUDIT_LOGS[:MAX_ADMIN_AUDIT]
     save_admin_audit(ADMIN_AUDIT_LOGS)
 
+_admin_alert_in_progress = False  # Guard against infinite recursion
+
 def notify_admin_alert(message, subject='Admin Alert'):
-    """Best-effort admin alert via Telegram or email fallback."""
-    if TELEGRAM_BOT_TOKEN and (TELEGRAM_ADMIN_CHAT_ID or TELEGRAM_CHAT_IDS):
-        admin_chat_id = TELEGRAM_ADMIN_CHAT_ID or (TELEGRAM_CHAT_IDS.split(',')[0] if TELEGRAM_CHAT_IDS else None)
-        if admin_chat_id:
-            success, _ = send_telegram(message, chat_id=admin_chat_id)
+    """Best-effort admin alert via Telegram to ADMIN ONLY.
+    
+    Error/status messages are sent ONLY to TELEGRAM_ADMIN_CHAT_ID.
+    Regular subscribers never receive error alerts.
+    Includes recursion guard to prevent send_email -> notify_admin_alert loops.
+    """
+    global _admin_alert_in_progress
+    if _admin_alert_in_progress:
+        console_log("⚠️ notify_admin_alert skipped (recursion guard)", "debug")
+        return False
+    
+    _admin_alert_in_progress = True
+    try:
+        if TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_CHAT_ID:
+            success, _ = send_telegram(message, chat_id=TELEGRAM_ADMIN_CHAT_ID)
             if success:
                 return True
+            console_log("⚠️ Admin alert Telegram failed, trying email fallback", "warning")
 
-    if CONFIG.get('heartbeat_email'):
-        return send_email(subject, message, CONFIG['heartbeat_email'])
-    return False
+        if CONFIG.get('heartbeat_email'):
+            return send_email(subject, message, CONFIG['heartbeat_email'])
+        return False
+    finally:
+        _admin_alert_in_progress = False
 
 def record_visit():
     """Record a client landing page visit without a database."""
@@ -832,10 +880,9 @@ def load_status():
     return {'last_daily_summary': None, 'total_checks': 0, 'last_heartbeat': None, 'last_check_time': None}
 
 def save_status(status):
-    """Save tracker status."""
+    """Save tracker status atomically."""
     try:
-        with open(STATUS_FILE, 'w') as f:
-            json.dump(status, f, indent=2)
+        atomic_json_write(STATUS_FILE, status)
     except Exception as e:
         log_activity(f"Failed to save status: {e}", "error")
 
@@ -874,10 +921,9 @@ def load_seen_events():
     return {'event_ids': [], 'event_details': []}
 
 def save_seen_events(seen_data):
-    """Save seen events."""
+    """Save seen events atomically."""
     try:
-        with open(DB_FILE, 'w') as f:
-            json.dump(seen_data, f, indent=2)
+        atomic_json_write(DB_FILE, seen_data)
     except Exception as e:
         log_activity(f"Failed to save events: {e}", "error")
 
@@ -1076,15 +1122,40 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
     return False
 
 # ===== TELEGRAM BOT NOTIFICATIONS =====
+def get_regular_chat_ids():
+    """Get list of regular (non-admin) subscriber chat IDs."""
+    if not TELEGRAM_CHAT_IDS:
+        return []
+    all_ids = [cid.strip() for cid in TELEGRAM_CHAT_IDS.split(',') if cid.strip()]
+    # Exclude admin chat ID from regular list so admin doesn't get duplicates
+    if TELEGRAM_ADMIN_CHAT_ID:
+        return [cid for cid in all_ids if cid != TELEGRAM_ADMIN_CHAT_ID]
+    return all_ids
+
+def get_admin_chat_id():
+    """Get the admin chat ID, falling back to first regular ID if not set."""
+    if TELEGRAM_ADMIN_CHAT_ID:
+        return TELEGRAM_ADMIN_CHAT_ID
+    # Fallback: use first regular chat ID
+    if TELEGRAM_CHAT_IDS:
+        first_id = TELEGRAM_CHAT_IDS.split(',')[0].strip()
+        if first_id:
+            return first_id
+    return None
+
 def send_telegram(message, chat_id=None):
-    """Send message via Telegram Bot. FREE and unlimited!"""
+    """Send message via Telegram Bot to specified chat_id(s).
+    
+    If chat_id is given, sends only to that ID.
+    If chat_id is None, sends to ALL configured TELEGRAM_CHAT_IDS.
+    """
     if not TELEGRAM_BOT_TOKEN:
         console_log("⚠️ Telegram not configured (missing bot token)", "debug")
         return False, "Telegram not configured"
     
     # Get chat IDs to send to
     if chat_id:
-        chat_ids = [chat_id]
+        chat_ids = [str(chat_id).strip()]
     elif TELEGRAM_CHAT_IDS:
         chat_ids = [cid.strip() for cid in TELEGRAM_CHAT_IDS.split(',') if cid.strip()]
     else:
@@ -1094,6 +1165,7 @@ def send_telegram(message, chat_id=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     success_count = 0
     last_error = None
+    failed_ids = []
     
     for cid in chat_ids:
         try:
@@ -1108,20 +1180,84 @@ def send_telegram(message, chat_id=None):
                 success_count += 1
                 console_log(f"✅ Telegram sent to chat {cid[:10]}...", "success")
             else:
-                last_error = f"HTTP {response.status_code}: {response.text[:50]}"
+                resp_data = {}
+                try:
+                    resp_data = response.json()
+                except:
+                    pass
+                error_desc = resp_data.get('description', response.text[:80])
+                last_error = f"HTTP {response.status_code}: {error_desc}"
+                failed_ids.append(cid)
                 console_log(f"⚠️ Telegram error for {cid[:10]}: {last_error}", "warning")
+                
+                # Log specific common errors for debugging
+                if response.status_code == 400:
+                    console_log(f"   └─ Possible cause: invalid chat_id or bad HTML formatting", "debug")
+                elif response.status_code == 403:
+                    console_log(f"   └─ Bot was blocked by user or chat not found", "debug")
+                elif response.status_code == 401:
+                    console_log(f"   └─ Invalid bot token", "debug")
+        except requests.exceptions.Timeout:
+            last_error = "Request timed out (10s)"
+            failed_ids.append(cid)
+            console_log(f"⏱️ Telegram timeout for {cid[:10]}...", "warning")
+        except requests.exceptions.ConnectionError as e:
+            last_error = f"Connection error: {str(e)[:40]}"
+            failed_ids.append(cid)
+            console_log(f"🔌 Telegram connection error for {cid[:10]}...", "warning")
         except Exception as e:
             last_error = str(e)[:50]
+            failed_ids.append(cid)
             console_log(f"⚠️ Telegram exception: {last_error}", "warning")
     
     if success_count > 0:
-        log_activity(f"📱 Telegram sent to {success_count} chat(s)", "success")
+        log_activity(f"📱 Telegram sent to {success_count}/{len(chat_ids)} chat(s)", "success")
+        if failed_ids:
+            log_activity(f"⚠️ Telegram failed for {len(failed_ids)} chat(s)", "warning")
+        return True, None
+    return False, last_error
+
+def send_telegram_to_admin(message):
+    """Send message to admin chat ID ONLY. Used for errors, heartbeat, status."""
+    admin_id = get_admin_chat_id()
+    if not admin_id:
+        console_log("⚠️ No admin chat ID configured for admin-only message", "debug")
+        return False, "No admin chat ID"
+    return send_telegram(message, chat_id=admin_id)
+
+def send_telegram_to_subscribers(message):
+    """Send message to regular subscribers ONLY (excludes admin to avoid duplicates).
+    Use this for new event alerts that admin also receives via send_telegram_new_events."""
+    regular_ids = get_regular_chat_ids()
+    if not regular_ids:
+        console_log("⚠️ No regular subscriber chat IDs configured", "debug")
+        return False, "No subscriber chat IDs"
+    
+    success_count = 0
+    last_error = None
+    for cid in regular_ids:
+        ok, err = send_telegram(message, chat_id=cid)
+        if ok:
+            success_count += 1
+        else:
+            last_error = err
+    
+    if success_count > 0:
         return True, None
     return False, last_error
 
 def send_telegram_new_events(events):
-    """Send new event notification via Telegram."""
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_IDS:
+    """Send new event notification via Telegram to ALL subscribers + admin.
+    
+    New events are NON-ERROR messages, so they go to everyone.
+    Admin also gets them so they don't miss events.
+    """
+    if not TELEGRAM_BOT_TOKEN:
+        return False
+    
+    # Need at least one chat ID (admin or regular)
+    if not TELEGRAM_CHAT_IDS and not TELEGRAM_ADMIN_CHAT_ID:
+        console_log("⚠️ No Telegram chat IDs configured for event alerts", "debug")
         return False
     
     now = datetime.now(timezone.utc)
@@ -1147,19 +1283,43 @@ def send_telegram_new_events(events):
 🤖 <i>Dubai Flea Market Tracker</i>"""
     
     console_log(f"📱 Sending Telegram notification for {len(events)} event(s)", "info")
-    success, error = send_telegram(message)
+    
+    # Send to ALL chat IDs (regular subscribers + admin)
+    # Build complete list: all regular IDs + admin (deduplicated)
+    all_ids = set()
+    if TELEGRAM_CHAT_IDS:
+        all_ids.update(cid.strip() for cid in TELEGRAM_CHAT_IDS.split(',') if cid.strip())
+    if TELEGRAM_ADMIN_CHAT_ID:
+        all_ids.add(TELEGRAM_ADMIN_CHAT_ID)
+    
+    success_count = 0
+    last_error = None
+    for cid in all_ids:
+        ok, err = send_telegram(message, chat_id=cid)
+        if ok:
+            success_count += 1
+        else:
+            last_error = err
+    
+    success = success_count > 0
+    error = None if success else last_error
+    console_log(f"📱 Event notification sent to {success_count}/{len(all_ids)} chat(s)", "success" if success else "warning")
     if not success:
         log_activity(f"📱 Telegram failed for new events: {error}", "warning")
         notify_admin_alert(f"Telegram failed for new event alerts: {error}", "Telegram Alert Failure")
     return success
 
 def send_telegram_heartbeat():
-    """Send heartbeat via Telegram to ADMIN ONLY (not all subscribers)."""
+    """Send heartbeat via Telegram to ADMIN ONLY (not all subscribers).
+    
+    Heartbeats are admin-only status messages. Regular subscribers
+    should NOT receive these.
+    """
     if not TELEGRAM_BOT_TOKEN:
         return False
     
-    # Use admin chat ID only, or fall back to first chat ID
-    admin_chat_id = TELEGRAM_ADMIN_CHAT_ID or (TELEGRAM_CHAT_IDS[0] if TELEGRAM_CHAT_IDS else None)
+    # Use admin chat ID only, falling back to first chat ID via helper
+    admin_chat_id = get_admin_chat_id()
     if not admin_chat_id:
         return False
     
@@ -1280,12 +1440,16 @@ def send_heartbeat():
     return result
 
 def send_telegram_daily_summary():
-    """Send daily summary via Telegram to ADMIN ONLY."""
+    """Send daily summary via Telegram to ADMIN ONLY.
+    
+    Daily summaries are admin-only status reports. Regular subscribers
+    should NOT receive these.
+    """
     if not TELEGRAM_BOT_TOKEN:
         return False
     
-    # Use admin chat ID only, or fall back to first chat ID
-    admin_chat_id = TELEGRAM_ADMIN_CHAT_ID or (TELEGRAM_CHAT_IDS[0] if TELEGRAM_CHAT_IDS else None)
+    # Use admin chat ID only, falling back to first chat ID via helper
+    admin_chat_id = get_admin_chat_id()
     if not admin_chat_id:
         return False
     
@@ -1573,6 +1737,14 @@ def background_checker():
                 console_log(f"   └─ Full trace logged to console", "debug")
                 print(f"[FULL TRACEBACK]\n{full_trace}")
                 
+                # Send error to admin only via Telegram
+                notify_admin_alert(
+                    f"⚠️ Checker Error ({consecutive_errors}/{max_consecutive_errors})\n"
+                    f"Type: {type(e).__name__}\n"
+                    f"Error: {error_msg}",
+                    "Checker Error Alert"
+                )
+                
                 # If too many consecutive errors, wait longer before retry
                 if consecutive_errors >= max_consecutive_errors:
                     console_log("🔄 Too many errors, entering recovery mode (5 min cooldown)", "warning")
@@ -1789,6 +1961,7 @@ def api_health():
 
 @app.route('/api/status')
 @rate_limit
+@require_admin
 def api_status():
     """API endpoint for status data with calculated timer values."""
     status = load_status()
@@ -1830,6 +2003,7 @@ def api_status():
 
 @app.route('/api/console')
 @rate_limit
+@require_admin
 def api_console():
     """API endpoint for system console logs."""
     return jsonify({
@@ -1854,6 +2028,7 @@ def api_console():
 
 @app.route('/api/check-history')
 @rate_limit
+@require_admin
 def api_check_history():
     """API endpoint for check history cards."""
     return jsonify({
@@ -1863,6 +2038,7 @@ def api_check_history():
 
 @app.route('/api/diagnostics')
 @rate_limit
+@require_admin
 def api_diagnostics():
     """API endpoint for detailed API diagnostics."""
     seen_data = load_seen_events()
@@ -2342,6 +2518,7 @@ def test_all_emails():
 
 @app.route('/api/live-events')
 @rate_limit
+@require_admin
 def live_events():
     """Fetch current live events from website."""
     events = fetch_events()
@@ -2363,6 +2540,7 @@ def live_events():
 
 @app.route('/api/email-history')
 @rate_limit
+@require_admin
 def get_email_history():
     """Get email history."""
     history = load_email_history()
@@ -2385,6 +2563,7 @@ def reveal_email():
 
 @app.route('/api/logs')
 @rate_limit
+@require_admin
 def get_logs():
     """Get activity logs."""
     return jsonify({'logs': ACTIVITY_LOGS})
@@ -2404,6 +2583,7 @@ def clear_logs():
 
 @app.route('/api/stats')
 @rate_limit
+@require_admin
 def get_stats():
     """Get event statistics for charting."""
     console_log("📊 Stats API requested", "debug")
@@ -2459,6 +2639,7 @@ def get_stats():
 
 @app.route('/api/export-logs')
 @rate_limit
+@require_admin
 def export_logs():
     """Export activity logs as JSON or CSV."""
     format_type = request.args.get('format', 'json')
@@ -2495,6 +2676,7 @@ def export_logs():
 
 @app.route('/api/export-events')
 @rate_limit
+@require_admin
 def export_events():
     """Export tracked events as JSON or CSV."""
     format_type = request.args.get('format', 'json')
@@ -2695,6 +2877,7 @@ def test_telegram():
 
 @app.route('/api/telegram-status')
 @rate_limit
+@require_admin
 def telegram_status():
     """Get Telegram configuration status."""
     return jsonify({
@@ -2891,6 +3074,7 @@ def handle_theme():
 
 @app.route('/api/search-events')
 @rate_limit
+@require_admin
 def search_events():
     """Search through tracked events."""
     query = request.args.get('q', '').lower().strip()
