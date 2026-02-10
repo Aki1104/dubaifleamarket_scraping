@@ -10,7 +10,8 @@
     8388,
     8387,
     8647,
-    8776
+    8776,
+    8783
   ],
   "event_details": [
     {
@@ -54,6 +55,13 @@
       "date_posted": "2026-02-10T10:26:08",
       "link": "https://dubai-fleamarket.com/product/al-barsha-pond-park-saturday-28-february-2026/",
       "first_seen": "2026-02-10 09:04 UTC"
+    },
+    {
+      "id": 8783,
+      "title": "Zabeel Park, Gate 1, Gate 2 / Saturday 7 March 2026 / AED295+Vat",
+      "date_posted": "2026-02-10T14:38:13",
+      "link": "https://dubai-fleamarket.com/product/zabeel-park-gate-1-gate-2-saturday-7-march-2026-aed295-vat/",
+      "first_seen": "2026-02-10 11:14 UTC"
     }
   ]
 }
