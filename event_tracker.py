@@ -1,6 +1,23 @@
 """
 =============================================================================
-📧 DUBAI FLEA MARKET EVENT TRACKER - event_tracker.py
+⚠️  DEPRECATED - DO NOT USE THIS FILE DIRECTLY
+=============================================================================
+
+This standalone script has been superseded by app.py which provides:
+  - Web dashboard with admin UI
+  - Telegram + Email notifications
+  - Background event checking with self-healing
+  - Heartbeat monitoring and email retry queue
+
+To run the tracker, use:
+    python app.py
+    # or via gunicorn:
+    gunicorn app:app --bind 0.0.0.0:5000 --workers 1 --threads 2
+
+This file is kept for reference only. All active development happens in app.py.
+
+=============================================================================
+📧 DUBAI FLEA MARKET EVENT TRACKER - event_tracker.py (LEGACY)
 =============================================================================
 
 PURPOSE:
@@ -82,7 +99,7 @@ TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
 # 💓 Heartbeat settings - sends status email every X hours to confirm bot is running
 HEARTBEAT_ENABLED = os.environ.get('HEARTBEAT_ENABLED', 'true').lower() == 'true'  # Enabled by default!
 HEARTBEAT_HOURS = int(os.environ.get('HEARTBEAT_HOURS', '3'))  # Every 3 hours by default
-HEARTBEAT_EMAIL = os.environ.get('HEARTBEAT_EMAIL', 'steevenparubrub@gmail.com')  # Separate heartbeat recipient
+HEARTBEAT_EMAIL = os.environ.get('HEARTBEAT_EMAIL', '')  # Set via environment variable
 
 
 # ===== HELPER FUNCTIONS =====
