@@ -12,7 +12,8 @@
     8647,
     8776,
     8783,
-    8787
+    8787,
+    9253
   ],
   "event_details": [
     {
@@ -70,6 +71,13 @@
       "date_posted": "2026-02-10T15:00:56",
       "link": "https://dubai-fleamarket.com/product/dip-1-the-market-mall-indoor-sunday-22-february-2026-aed295vat/",
       "first_seen": "2026-02-10 12:03 UTC"
+    },
+    {
+      "id": 9253,
+      "title": "Expo Village Park / Saturday 14 March 2026",
+      "date_posted": "2026-02-24T11:51:28",
+      "link": "https://dubai-fleamarket.com/product/expo-village-park-saturday-14-march-2026/",
+      "first_seen": "2026-02-26 10:08 UTC"
     }
   ]
 }
