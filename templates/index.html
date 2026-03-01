@@ -390,7 +390,13 @@
         <div class="mx-auto mb-10 max-w-2xl rounded-3xl border border-black/5 bg-white px-8 py-8 text-left shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
             <div class="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
                 <a href="https://github.com/Aki1104" target="_blank" rel="noopener noreferrer" class="flex-shrink-0 group" aria-label="GitHub profile">
-                    <div class="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-emerald-600 to-sky-400 text-white text-xl font-bold shadow-glow transition group-hover:-translate-y-0.5 group-hover:shadow-lg">
+                    <img
+                        src="{{ url_for('static', filename='assets/images/aki1104profile.png') }}"
+                        alt="Aki1104"
+                        class="h-16 w-16 rounded-2xl object-cover shadow-glow transition group-hover:-translate-y-0.5 group-hover:shadow-lg"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';"
+                    >
+                    <div class="hidden h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-emerald-600 to-sky-400 text-white text-xl font-bold shadow-glow">
                         AK
                     </div>
                 </a>
@@ -404,10 +410,12 @@
                         <span class="rounded-full bg-emerald-500/15 px-3 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Builder</span>
                     </div>
                     <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                        Dubai Flea Market is one of my favourite spots — but events would sell out before I even knew they were posted.
-                        So I built this: a 24/7 tracker that pings me on Telegram the moment something new goes live.
-                        What started as a personal tool turned into a full-stack project with a live dashboard, email alerts, and
-                        a database backend. Built because I was tired of missing out.
+                        My mother loves visiting Dubai Flea Market, but it caused her a lot of stress having to check
+                        the website manually every day just to find out when the next event was happening.
+                        I built this project for her so she never has to check again. It watches the site 24/7 and
+                        sends an instant Telegram notification the moment a new event is posted.
+                        What started as a small fix for her turned into a full project with a live dashboard,
+                        email alerts, and a database backend. Built out of love.
                     </p>
                 </div>
             </div>
