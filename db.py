@@ -15,6 +15,7 @@ Security:
 """
 
 import os
+import socket
 import sqlite3
 import secrets
 import threading
@@ -24,38 +25,29 @@ from datetime import datetime, timezone, timedelta
 try:
     import libsql_experimental as libsql
     HAS_LIBSQL = True
-except ImportError:
+except (ImportError, OSError, Exception) as _imp_err:
     HAS_LIBSQL = False
+    print(f"[DB] libsql_experimental not available: {_imp_err}")
 
 
 def _connect_turso_with_timeout(url: str, token: str, timeout_sec: int = 10):
     """
-    Attempt a Turso connection with a hard timeout.
-    libsql.connect() has no built-in timeout, so we run it in a thread
-    and abort if it doesn't complete in `timeout_sec` seconds.
-    Returns the connection object, or raises TimeoutError / Exception.
+    Attempt a Turso connection with a hard socket-level timeout.
+    Sets a global socket timeout so even C-level code that holds the GIL
+    will be interrupted. Restores the original timeout afterward.
     """
-    result = [None]
-    error = [None]
-
-    def _do_connect():
-        try:
-            result[0] = libsql.connect(database=url, auth_token=token)
-        except Exception as e:
-            error[0] = e
-
-    t = threading.Thread(target=_do_connect, daemon=True)
-    t.start()
-    t.join(timeout=timeout_sec)
-
-    if t.is_alive():
+    old_timeout = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(timeout_sec)
+        conn = libsql.connect(database=url, auth_token=token)
+        return conn
+    except socket.timeout:
         raise TimeoutError(
             f"Turso connection timed out after {timeout_sec}s — "
             "falling back to local SQLite"
         )
-    if error[0] is not None:
-        raise error[0]
-    return result[0]
+    finally:
+        socket.setdefaulttimeout(old_timeout)
 
 # ---------- Configuration ----------
 TURSO_DATABASE_URL = os.environ.get('TURSO_DATABASE_URL', '')

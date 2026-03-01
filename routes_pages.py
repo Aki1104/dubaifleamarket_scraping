@@ -30,18 +30,25 @@ from state import (
 
 @app.route('/')
 def index():
-    """Client-facing landing page."""
+    """Client-facing landing page — always renders, even if DB is down."""
     from config import CONFIG, VISITOR_LOG
-    from state import load_seen_events
     now = datetime.now(timezone.utc)
-    record_visit()
-    seen_data = load_seen_events()
+    try:
+        record_visit()
+    except Exception:
+        pass
+    try:
+        from state import load_seen_events
+        seen_data = load_seen_events()
+        seen_count = len(seen_data.get('event_ids', []))
+    except Exception:
+        seen_count = 0
     return render_template(
         'index.html',
         current_year=now.year,
         total_checks=CONFIG.get('total_checks', 0),
         emails_sent=CONFIG.get('emails_sent', 0),
-        seen_count=len(seen_data.get('event_ids', [])),
+        seen_count=seen_count,
         visitors_24h=len(VISITOR_LOG),
     )
 
