@@ -48,6 +48,7 @@ def index():
         current_year=now.year,
         total_checks=CONFIG.get('total_checks', 0),
         emails_sent=CONFIG.get('emails_sent', 0),
+        telegram_messages=CONFIG.get('telegram_messages_sent', 0),
         seen_count=seen_count,
         visitors_24h=len(VISITOR_LOG),
     )

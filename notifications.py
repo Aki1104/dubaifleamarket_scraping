@@ -139,6 +139,7 @@ def send_telegram(message: str, chat_id: str | None = None) -> tuple:
             console_log(f"⚠️ Telegram exception: {last_error}", "warning")
 
     if success_count > 0:
+        CONFIG['telegram_messages_sent'] = CONFIG.get('telegram_messages_sent', 0) + success_count
         log_activity(f"📱 Telegram sent to {success_count}/{len(chat_ids)} chat(s)", "success")
         if failed_ids:
             log_activity(f"⚠️ Telegram failed for {len(failed_ids)} chat(s)", "warning")

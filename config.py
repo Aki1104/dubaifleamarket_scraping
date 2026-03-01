@@ -83,6 +83,7 @@ CONFIG = {
     'total_checks': 0,
     'total_new_events': 0,
     'emails_sent': 0,
+    'telegram_messages_sent': 0,
     'uptime_start': datetime.now(timezone.utc).isoformat(),
     'last_smtp_error': None,
     'last_smtp_error_at': None,

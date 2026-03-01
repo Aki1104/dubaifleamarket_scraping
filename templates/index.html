@@ -22,6 +22,22 @@
             .fade-up { animation: none; opacity: 1; transform: none; }
             .float-orb { animation: none; }
         }
+
+        /* Metric strip — 6 columns on large screens */
+        @media (min-width: 1024px) {
+            #metric-strip { grid-template-columns: repeat(6, 1fr); }
+        }
+
+        /* Hover states for interactive elements */
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; cursor: pointer; }
+        .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+        .btn-hover { transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease; }
+        .btn-hover:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); opacity: 0.92; }
+        .nav-toggle-hover { transition: background-color 0.2s ease, transform 0.15s ease; }
+        .nav-toggle-hover:hover { background-color: rgba(0,0,0,0.06); transform: scale(1.05); }
+        .dark .nav-toggle-hover:hover { background-color: rgba(255,255,255,0.08); }
+        .link-hover { transition: color 0.15s ease; }
+        .link-hover:hover { opacity: 0.8; }
     </style>
 </head>
 <body class="font-body bg-sand text-ink dark:bg-slate-950 dark:text-slate-100">
@@ -54,7 +70,7 @@
                 <a class="inline-flex h-10 items-center rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-4 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5" href="#contact">Request Demo</a>
             </div>
 
-            <button class="flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white/70 text-slate-700 dark:border-slate-700/40 dark:bg-slate-900/70 dark:text-slate-100 lg:hidden" type="button" aria-label="Toggle navigation" aria-expanded="false" onclick="toggleNav()" id="nav-toggle">
+            <button class="flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white/70 text-slate-700 dark:border-slate-700/40 dark:bg-slate-900/70 dark:text-slate-100 lg:hidden nav-toggle-hover" type="button" aria-label="Toggle navigation" aria-expanded="false" onclick="toggleNav()" id="nav-toggle">
                 <i class="bi bi-list"></i>
             </button>
         </nav>
@@ -66,11 +82,11 @@
                 <a class="hover:text-accent" href="#security">Security</a>
                 <a class="hover:text-accent" href="#contact">Contact</a>
                 <div class="flex items-center gap-3 pt-2">
-                    <button class="flex h-10 w-10 items-center justify-center rounded-full border border-accent/40 text-accent" type="button" onclick="toggleTheme()" aria-label="Toggle theme" title="Toggle theme">
+                    <button class="flex h-10 w-10 items-center justify-center rounded-full border border-accent/40 text-accent nav-toggle-hover" type="button" onclick="toggleTheme()" aria-label="Toggle theme" title="Toggle theme">
                         <i class="bi bi-moon-stars"></i>
                     </button>
-                    <a class="inline-flex h-10 items-center rounded-full border border-accent/40 px-4 text-sm font-semibold text-accent" href="/login">Admin</a>
-                    <a class="inline-flex h-10 items-center rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-4 text-sm font-semibold text-white" href="#contact">Request Demo</a>
+                    <a class="inline-flex h-10 items-center rounded-full border border-accent/40 px-4 text-sm font-semibold text-accent btn-hover" href="/login">Admin</a>
+                    <a class="inline-flex h-10 items-center rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-4 text-sm font-semibold text-white btn-hover" href="#contact">Request Demo</a>
                 </div>
             </div>
         </div>
@@ -86,8 +102,8 @@
                     and delivers daily summaries — built for one dedicated client at a time.
                 </p>
                 <div class="mt-6 flex flex-wrap gap-3">
-                    <a class="rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-5 py-2 text-sm font-semibold text-white shadow-glow" href="#contact">Book a Demo</a>
-                    <a class="rounded-full border border-black/10 px-5 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700/50 dark:text-slate-200" href="#features">Explore Features</a>
+                    <a class="rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-5 py-2 text-sm font-semibold text-white shadow-glow btn-hover" href="#contact">Book a Demo</a>
+                    <a class="rounded-full border border-black/10 px-5 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700/50 dark:text-slate-200 btn-hover" href="#features">Explore Features</a>
                 </div>
 
                 <div class="mt-6 grid gap-3 sm:grid-cols-3">
@@ -189,35 +205,42 @@
         </section>
 
         <section class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-5 fade-up" id="metric-strip">
-            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow hover-lift dark:bg-slate-900/80">
                 <i class="bi bi-activity text-xl text-accent"></i>
                 <div>
                     <div class="text-xs text-slate-500">Total Checks</div>
                     <div class="text-lg font-semibold" id="metric-total-checks">{{ total_checks }}</div>
                 </div>
             </div>
-            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow hover-lift dark:bg-slate-900/80">
                 <i class="bi bi-calendar-event text-xl text-accent"></i>
                 <div>
                     <div class="text-xs text-slate-500">Events Tracked</div>
                     <div class="text-lg font-semibold" id="metric-events">{{ seen_count }}</div>
                 </div>
             </div>
-            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow hover-lift dark:bg-slate-900/80">
                 <i class="bi bi-envelope-check text-xl text-accent"></i>
                 <div>
                     <div class="text-xs text-slate-500">Emails Sent</div>
                     <div class="text-lg font-semibold" id="metric-emails">{{ emails_sent }}</div>
                 </div>
             </div>
-            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow hover-lift dark:bg-slate-900/80">
                 <i class="bi bi-inbox text-xl text-accent"></i>
                 <div>
                     <div class="text-xs text-slate-500">Queue Pending</div>
                     <div class="text-lg font-semibold" id="metric-queue">--</div>
                 </div>
             </div>
-            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow dark:bg-slate-900/80">
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow hover-lift dark:bg-slate-900/80">
+                <i class="bi bi-telegram text-xl text-accent"></i>
+                <div>
+                    <div class="text-xs text-slate-500">Telegram Sent</div>
+                    <div class="text-lg font-semibold" id="metric-telegram">{{ telegram_messages }}</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-glow hover-lift dark:bg-slate-900/80">
                 <i class="bi bi-people text-xl text-accent"></i>
                 <div>
                     <div class="text-xs text-slate-500">Visitors (24h)</div>
@@ -237,7 +260,7 @@
                 </div>
                 <div class="mt-2 text-sm text-slate-500" id="latest-event-meta">--</div>
                 <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
-                    <a class="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700/50 dark:text-slate-200" id="latest-event-link" href="#" target="_blank">Open Event</a>
+                    <a class="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700/50 dark:text-slate-200 btn-hover" id="latest-event-link" href="#" target="_blank">Open Event</a>
                     <span class="text-sm text-slate-500" id="latest-event-id">ID: --</span>
                 </div>
             </div>
@@ -267,27 +290,27 @@
                 <p class="mt-3 text-sm text-slate-500">A client-friendly experience that pairs operational reliability with clear, real-time insights.</p>
             </div>
             <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80 hover-lift">
                     <h3 class="font-semibold">Real-time tracking</h3>
                     <p class="mt-2 text-sm text-slate-500">Automatic scans detect new listings and changes, with timestamps for proof and reporting.</p>
                 </div>
-                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80 hover-lift">
                     <h3 class="font-semibold">Instant Telegram alerts</h3>
                     <p class="mt-2 text-sm text-slate-500">Primary notification channel with fast delivery, plus admin-only heartbeats.</p>
                 </div>
-                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80 hover-lift">
                     <h3 class="font-semibold">Diagnostics dashboard</h3>
                     <p class="mt-2 text-sm text-slate-500">SMTP errors, queue health, and API status are surfaced for immediate action.</p>
                 </div>
-                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80 hover-lift">
                     <h3 class="font-semibold">Daily summaries</h3>
                     <p class="mt-2 text-sm text-slate-500">Automated daily digest with total events tracked and recipients served.</p>
                 </div>
-                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80 hover-lift">
                     <h3 class="font-semibold">Export-ready data</h3>
                     <p class="mt-2 text-sm text-slate-500">JSON and CSV export for reporting, analysis, and client documentation.</p>
                 </div>
-                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
+                <div class="rounded-3xl border border-black/5 bg-white p-6 shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80 hover-lift">
                     <h3 class="font-semibold">Admin controls</h3>
                     <p class="mt-2 text-sm text-slate-500">Secure access to sensitive actions with rate limiting and session protection.</p>
                 </div>
@@ -358,15 +381,15 @@
                 <p class="mt-3 text-sm text-slate-300">Session-based admin login, rate limiting, and safe defaults reduce exposure.</p>
             </div>
             <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div class="rounded-2xl bg-white/10 p-5">
+                <div class="rounded-2xl bg-white/10 p-5 hover-lift">
                     <h3 class="font-semibold">Session logins</h3>
                     <p class="mt-2 text-sm text-slate-300">Admin actions require login, with short-lived sessions and secure cookies.</p>
                 </div>
-                <div class="rounded-2xl bg-white/10 p-5">
+                <div class="rounded-2xl bg-white/10 p-5 hover-lift">
                     <h3 class="font-semibold">Rate limiting</h3>
                     <p class="mt-2 text-sm text-slate-300">Block high-volume attempts to reduce brute-force and abusive traffic.</p>
                 </div>
-                <div class="rounded-2xl bg-white/10 p-5">
+                <div class="rounded-2xl bg-white/10 p-5 hover-lift">
                     <h3 class="font-semibold">Sanitized inputs</h3>
                     <p class="mt-2 text-sm text-slate-300">Inputs are cleaned and validated before they touch storage or logic.</p>
                 </div>
@@ -379,82 +402,13 @@
                 <p class="mt-2 text-sm text-slate-500">See real-time tracking, daily summaries, and export-ready reports — tailored for your needs.</p>
             </div>
             <div class="flex flex-wrap gap-3">
-                <a class="rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-5 py-2 text-sm font-semibold text-white shadow-glow" href="/login">Request Admin Walkthrough</a>
-                <a class="rounded-full border border-accent/40 px-5 py-2 text-sm font-semibold text-accent" href="/api/export-events?format=csv">Download Sample Report</a>
+                <a class="rounded-full bg-gradient-to-br from-emerald-600 to-sky-400 px-5 py-2 text-sm font-semibold text-white shadow-glow btn-hover" href="/login">Request Admin Walkthrough</a>
+                <a class="rounded-full border border-accent/40 px-5 py-2 text-sm font-semibold text-accent btn-hover" href="/api/export-events?format=csv">Download Sample Report</a>
             </div>
         </section>
     </main>
 
     <footer class="py-8 text-center text-sm text-slate-500">
-        <!-- Developer Section -->
-        <style>
-            .dev-card { max-width: 42rem; margin: 0 auto 2.5rem; }
-            .dev-grid { display: grid; grid-template-columns: 1fr; }
-            .dev-photo { position: relative; height: 140px; overflow: hidden; }
-            .dev-photo img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
-            .dev-content { padding: 1.5rem; }
-            @media (min-width: 640px) {
-                .dev-grid { grid-template-columns: 11rem 1fr; }
-                .dev-photo { height: auto; min-height: 100%; }
-            }
-        </style>
-        <div class="dev-card overflow-hidden rounded-3xl border border-black/5 bg-white text-left shadow-glow dark:border-slate-700/40 dark:bg-slate-900/80">
-            <div class="dev-grid">
-
-                <!-- Photo panel -->
-                <div class="dev-photo bg-gradient-to-br from-emerald-600 to-sky-400">
-                    <img
-                        src="{{ url_for('static', filename='assets/images/aki1104profile.png') }}"
-                        alt="Aki1104"
-                        onerror="this.style.display='none'; document.getElementById('dev-initials').style.display='flex';"
-                        id="dev-profile-img"
-                    >
-                    <!-- Fallback initials shown only if image fails -->
-                    <div style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; font-size:2rem; font-weight:700; color:#fff;" id="dev-initials">AK</div>
-                </div>
-
-                <!-- Content panel -->
-                <div class="dev-content flex flex-col justify-center gap-3">
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="font-display text-xl font-semibold text-ink dark:text-slate-100">Aki1104</span>
-                            <span class="rounded-full bg-emerald-500/15 px-3 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Builder</span>
-                        </div>
-                        <div class="mt-2 flex flex-wrap gap-2">
-                            <a href="https://github.com/Aki1104" target="_blank" rel="noopener noreferrer"
-                               class="inline-flex items-center gap-1.5 rounded-full border border-accent/30 px-3 py-1 text-xs font-medium text-accent transition hover:bg-accent/10">
-                                <i class="bi bi-github"></i> GitHub
-                            </a>
-                            <a href="https://msbp-portfolio.vercel.app/" target="_blank" rel="noopener noreferrer"
-                               class="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-500/10">
-                                <i class="bi bi-globe2"></i> Portfolio
-                            </a>
-                        </div>
-                    </div>
-                    <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-                        My mother loves visiting Dubai Flea Market, but it caused her a lot of stress having to check
-                        the website manually every day just to find out when the next event was happening.
-                        I built this project for her so she never has to check again. It watches the site 24/7 and
-                        sends an instant Telegram notification the moment a new event is posted.
-                        What started as a small fix for her turned into a full project with a live dashboard,
-                        email alerts, and a database backend. Built out of love.
-                    </p>
-                </div>
-            </div>
-        </div>
-        <script>
-            (function() {
-                var img = document.getElementById('dev-profile-img');
-                var initials = document.getElementById('dev-initials');
-                if (img) {
-                    img.addEventListener('error', function() {
-                        img.style.display = 'none';
-                        if (initials) initials.style.display = 'flex';
-                    });
-                }
-            })();
-        </script>
-
         <div>Dubai Flea Market Intelligence</div>
         <div>Trusted monitoring and alerting | {{ current_year }}</div>
     </footer>
