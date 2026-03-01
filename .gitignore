@@ -40,8 +40,17 @@ env/
 venv/
 ENV/
 
-# NOTE: seen_events.json and tracker_status.json are TRACKED in GitHub
-# because the workflow needs them to remember which events have been seen
+# NOTE: All data is stored in Turso (cloud DB) — no JSON data files needed
+# JSON data files (legacy — now in database)
+seen_events.json
+tracker_status.json
+activity_logs.json
+email_history.json
+email_queue.json
+event_stats.json
+admin_audit.json
+recipient_status.json
+theme_settings.json
 
 # Secrets (NEVER commit these!)
 *.env
@@ -54,6 +63,16 @@ config.py
 *credential*
 *.pem
 *.key
+
+# Local database fallback (Turso offline mode)
+local_data.db
+local_data.db-journal
+local_data.db-wal
+local_data.db-shm
+
+# Migration backups
+migration_backup/
+.migrated_to_db
 
 # IDE
 .vscode/

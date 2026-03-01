@@ -898,6 +898,36 @@
                 </div>
 
                 <div class="settings-section">
+                    <h4 class="settings-section-title"><i class="bi bi-envelope"></i> Email Notifications</h4>
+                    <p class="settings-desc">Control email delivery. Disabling prevents SMTP errors when Gmail is not configured.</p>
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <span class="settings-label">Email Notifications</span>
+                            <span class="settings-hint">Send new event alerts and heartbeats via email</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-email-notifications" {% if config.email_notifications_enabled %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title"><i class="bi bi-telegram"></i> Telegram Notifications</h4>
+                    <p class="settings-desc">Control Telegram message delivery for event alerts, heartbeats, and summaries.</p>
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <span class="settings-label">Telegram Notifications</span>
+                            <span class="settings-hint">Send alerts to admin and subscribers via Telegram</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-telegram-notifications" {% if config.telegram_notifications_enabled %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
                     <h4 class="settings-section-title"><i class="bi bi-palette"></i> Appearance</h4>
                     <p class="settings-desc">Customize the dashboard look and feel</p>
                     <div class="settings-row">

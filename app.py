@@ -30,6 +30,28 @@ import secrets
 import time
 import re
 
+# Database layer — replaces all JSON file storage
+from db import (
+    get_connection, is_using_turso, get_db_status, migrate_from_json,
+    db_load_seen_events, db_load_seen_event_ids, db_save_seen_event,
+    db_save_seen_events_bulk, db_check_event_exists, db_remove_latest_event,
+    db_get_seen_event_count,
+    db_load_status, db_save_status, db_get_status, db_set_status,
+    db_add_log, db_get_logs, db_clear_logs,
+    db_add_email_history, db_get_email_history,
+    db_add_to_queue, db_get_queue, db_get_queue_item, db_update_queue_item,
+    db_remove_from_queue, db_clear_queue, db_get_queue_count,
+    db_get_queue_high_priority_count,
+    db_record_stat, db_get_stats, db_prune_stats,
+    db_get_notification_setting, db_set_notification_setting,
+    db_get_all_notification_settings,
+    db_add_subscriber, db_remove_subscriber, db_toggle_subscriber,
+    db_get_subscribers, db_get_active_subscriber_ids,
+    db_update_subscriber_notified, db_get_subscriber_count,
+    validate_chat_id, mask_chat_id,
+    db_add_audit_log, db_get_audit_logs,
+)
+
 # Load .env file so credentials (ADMIN_PASSWORD, etc.) are available
 try:
     from dotenv import load_dotenv
@@ -257,12 +279,10 @@ def add_security_headers(response):
 API_URL = "https://dubai-fleamarket.com/wp-json/wp/v2/product?per_page=20"
 
 DATA_DIR = os.environ.get('DATA_DIR', os.path.dirname(os.path.abspath(__file__)))
-DB_FILE = os.path.join(DATA_DIR, "seen_events.json")
-STATUS_FILE = os.path.join(DATA_DIR, "tracker_status.json")
-LOGS_FILE = os.path.join(DATA_DIR, "activity_logs.json")
-RECIPIENT_STATUS_FILE = os.path.join(DATA_DIR, "recipient_status.json")
-EMAIL_HISTORY_FILE = os.path.join(DATA_DIR, "email_history.json")
-ADMIN_AUDIT_FILE = os.path.join(DATA_DIR, "admin_audit.json")
+# Legacy JSON file paths — data now lives entirely in Turso DB.
+# These constants are kept only so the one-time migration code in db.py
+# can find old files if they still exist.
+_LEGACY_JSON_DIR = DATA_DIR
 
 # Telegram Bot (FREE - unlimited messages, instant push notifications)
 # Create bot: @BotFather on Telegram, get token
@@ -292,6 +312,8 @@ CONFIG = {
     'daily_summary_enabled': os.environ.get('DAILY_SUMMARY_ENABLED', 'true').lower() == 'true',
     'daily_summary_hour': int(os.environ.get('DAILY_SUMMARY_HOUR', '9')),
     'tracker_enabled': True,
+    'telegram_notifications_enabled': True,
+    'email_notifications_enabled': True,
     'last_check': None,
     'next_check': (datetime.now(timezone.utc) + timedelta(minutes=int(os.environ.get('CHECK_INTERVAL', '15')))).isoformat(),
     'next_heartbeat': (datetime.now(timezone.utc) + timedelta(hours=int(os.environ.get('HEARTBEAT_HOURS', '3')))).isoformat(),
@@ -322,107 +344,83 @@ SYSTEM_CONSOLE = []
 MAX_CONSOLE_LOGS = 200
 
 # ===== EMAIL QUEUE - Persistent retry for failed emails =====
-EMAIL_QUEUE_FILE = os.path.join(DATA_DIR, "email_queue.json")
+EMAIL_QUEUE_FILE = None  # Legacy — queue is now DB-backed
 EMAIL_QUEUE = []  # List of {subject, body, recipient, created_at, attempts, next_retry, priority}
 MAX_EMAIL_QUEUE = 50
 EMAIL_RETRY_INTERVALS = [30, 60, 120, 240]  # Minutes: 30min, 1hr, 2hr, 4hr
 MAX_EMAIL_AGE_HOURS = 24  # Give up after 24 hours
 
 def load_email_queue():
-    """Load email queue from file."""
+    """Load email queue from database."""
     global EMAIL_QUEUE
-    if os.path.exists(EMAIL_QUEUE_FILE):
-        try:
-            with open(EMAIL_QUEUE_FILE, 'r') as f:
-                EMAIL_QUEUE = json.load(f)
-                console_log(f"📬 Email queue loaded: {len(EMAIL_QUEUE)} pending emails", "debug")
-        except Exception as e:
-            console_log(f"⚠️ Failed to load email queue: {e}", "warning")
-            EMAIL_QUEUE = []
-    ensure_email_queue_ids()
+    try:
+        EMAIL_QUEUE = db_get_queue()
+        console_log(f"📬 Email queue loaded: {len(EMAIL_QUEUE)} pending emails", "debug")
+    except Exception as e:
+        console_log(f"⚠️ Failed to load email queue: {e}", "warning")
+        EMAIL_QUEUE = []
 
 def ensure_email_queue_ids():
-    """Ensure every queued item has a stable id."""
-    global EMAIL_QUEUE
-    changed = False
-    for item in EMAIL_QUEUE:
-        if not isinstance(item, dict):
-            continue
-        if not item.get('id'):
-            item['id'] = secrets.token_hex(8)
-            changed = True
-    if changed:
-        save_email_queue()
+    """No-op: database queue items always have IDs."""
+    pass
 
 def load_admin_audit_on_startup():
     global ADMIN_AUDIT_LOGS
-    ADMIN_AUDIT_LOGS = load_admin_audit()
+    ADMIN_AUDIT_LOGS = db_get_audit_logs(300)
 
 def save_email_queue():
-    """Save email queue to file atomically."""
+    """Sync in-memory queue with database."""
+    global EMAIL_QUEUE
     try:
-        atomic_json_write(EMAIL_QUEUE_FILE, EMAIL_QUEUE)
+        EMAIL_QUEUE = db_get_queue()
     except Exception as e:
-        console_log(f"⚠️ Failed to save email queue: {e}", "warning")
+        console_log(f"⚠️ Failed to sync email queue: {e}", "warning")
 
 def add_to_email_queue(subject, body, recipient, priority='normal'):
-    """Add a failed email to the retry queue."""
+    """Add a failed email to the retry queue (database-backed)."""
     global EMAIL_QUEUE
     
-    now = datetime.now(timezone.utc)
-    next_retry = now + timedelta(minutes=EMAIL_RETRY_INTERVALS[0])
-    
-    queue_item = {
-        'id': secrets.token_hex(8),
-        'subject': subject,
-        'body': body,
-        'recipient': recipient,
-        'created_at': now.isoformat(),
-        'attempts': 0,
-        'next_retry': next_retry.isoformat(),
-        'priority': priority,  # 'high' for new events, 'normal' for heartbeat/test
-        'last_error': None
-    }
-    
-    EMAIL_QUEUE.append(queue_item)
-    
-    # Limit queue size
-    if len(EMAIL_QUEUE) > MAX_EMAIL_QUEUE:
-        # Remove oldest low-priority items first
-        EMAIL_QUEUE.sort(key=lambda x: (x['priority'] != 'high', x['created_at']))
-        EMAIL_QUEUE = EMAIL_QUEUE[:MAX_EMAIL_QUEUE]
-    
-    save_email_queue()
-    console_log(f"📬 Email queued for retry: {mask_email(recipient)} ({priority} priority)", "info")
-    log_activity(f"📬 Email queued for retry to {mask_email(recipient)}", "warning")
+    try:
+        item_id = db_add_to_queue(subject, body, recipient, priority)
+        EMAIL_QUEUE = db_get_queue()  # Refresh in-memory copy
+        console_log(f"📬 Email queued for retry: {mask_email(recipient)} ({priority} priority)", "info")
+        log_activity(f"📬 Email queued for retry to {mask_email(recipient)}", "warning")
+    except Exception as e:
+        console_log(f"⚠️ Failed to queue email: {e}", "warning")
 
 def process_email_queue():
-    """Process pending emails in the queue. Called periodically."""
-    global EMAIL_QUEUE
+    """Process pending emails in the queue (DB-backed). Called periodically."""
+    queue_items = db_get_queue()
     
-    if not EMAIL_QUEUE:
+    if not queue_items:
         return
     
     now = datetime.now(timezone.utc)
     processed = 0
     removed = 0
     
-    console_log(f"📬 Processing email queue: {len(EMAIL_QUEUE)} pending", "info")
+    console_log(f"📬 Processing email queue: {len(queue_items)} pending", "info")
     
-    for item in EMAIL_QUEUE[:]:  # Iterate over copy
-        created = parse_iso_timestamp(item['created_at'])
+    for item in queue_items:
+        try:
+            created = datetime.fromisoformat(item['created_at'].replace('Z', '+00:00'))
+        except Exception:
+            created = now  # fallback
         age_hours = (now - created).total_seconds() / 3600
         
         # Remove if too old
         if age_hours > MAX_EMAIL_AGE_HOURS:
             console_log(f"⏰ Email expired (>{MAX_EMAIL_AGE_HOURS}h old): {mask_email(item['recipient'])}", "warning")
             log_activity(f"📧 Email expired after {MAX_EMAIL_AGE_HOURS}h: {item['subject'][:30]}...", "error")
-            EMAIL_QUEUE.remove(item)
+            db_remove_from_queue(item['id'])
             removed += 1
             continue
         
         # Check if it's time to retry
-        next_retry = parse_iso_timestamp(item['next_retry'])
+        try:
+            next_retry = datetime.fromisoformat(item['next_retry'].replace('Z', '+00:00'))
+        except Exception:
+            next_retry = now  # retry now if can't parse
         if now < next_retry:
             continue
         
@@ -434,28 +432,34 @@ def process_email_queue():
         if success:
             console_log(f"✅ Queued email delivered: {mask_email(item['recipient'])}", "success")
             log_activity(f"✅ Queued email finally delivered to {mask_email(item['recipient'])}", "success")
-            EMAIL_QUEUE.remove(item)
+            db_remove_from_queue(item['id'])
             processed += 1
         else:
-            item['attempts'] += 1
+            new_attempts = item['attempts'] + 1
             
             # Calculate next retry
-            if item['attempts'] < len(EMAIL_RETRY_INTERVALS):
-                delay_minutes = EMAIL_RETRY_INTERVALS[item['attempts']]
+            if new_attempts < len(EMAIL_RETRY_INTERVALS):
+                delay_minutes = EMAIL_RETRY_INTERVALS[new_attempts]
             else:
                 delay_minutes = EMAIL_RETRY_INTERVALS[-1]  # Use last interval
             
-            item['next_retry'] = (now + timedelta(minutes=delay_minutes)).isoformat()
+            new_next_retry = (now + timedelta(minutes=delay_minutes)).isoformat()
+            db_update_queue_item(item['id'], new_attempts, new_next_retry)
             console_log(f"⏳ Will retry in {delay_minutes} minutes", "debug")
     
     if processed or removed:
-        save_email_queue()
-        console_log(f"📬 Queue processed: {processed} sent, {removed} expired, {len(EMAIL_QUEUE)} remaining", "info")
+        remaining = db_get_queue_count()
+        console_log(f"📬 Queue processed: {processed} sent, {removed} expired, {remaining} remaining", "info")
+    
+    # Sync in-memory list for dashboard compatibility
+    EMAIL_QUEUE[:] = db_get_queue()
 
 def build_email_queue_payload(limit=None):
-    """Return a safe, UI-ready email queue payload."""
-    ensure_email_queue_ids()
-    items = EMAIL_QUEUE[:]
+    """Return a safe, UI-ready email queue payload (DB-backed)."""
+    items = db_get_queue()
+    total = len(items)
+    high_priority = sum(1 for e in items if e.get('priority') == 'high')
+
     if isinstance(limit, int):
         items = items[:limit]
 
@@ -474,81 +478,69 @@ def build_email_queue_payload(limit=None):
         })
 
     return {
-        'pending_count': len(EMAIL_QUEUE),
-        'high_priority': len([e for e in EMAIL_QUEUE if e.get('priority') == 'high']),
+        'pending_count': total,
+        'high_priority': high_priority,
         'items': payload_items
     }
 
-# ===== EVENT STATISTICS - For charting =====
-EVENT_STATS_FILE = os.path.join(DATA_DIR, "event_stats.json")
-EVENT_STATS = {
-    'daily': {},  # {'2026-01-30': {'checks': 5, 'new_events': 2, 'emails_sent': 3}}
-    'hourly': {}  # {'2026-01-30T14': {'checks': 1, 'new_events': 0}}
-}
+# ===== EVENT STATISTICS - DB-backed =====
+EVENT_STATS_FILE = None  # Legacy — stats now in DB
+EVENT_STATS = {'daily': {}, 'hourly': {}}  # In-memory cache (rebuilt from DB on read)
 
 def load_event_stats():
-    """Load event statistics from file."""
+    """Load event statistics from database."""
     global EVENT_STATS
-    if os.path.exists(EVENT_STATS_FILE):
-        try:
-            with open(EVENT_STATS_FILE, 'r') as f:
-                EVENT_STATS = json.load(f)
-                console_log("📊 Event statistics loaded from file", "debug")
-        except Exception as e:
-            console_log(f"⚠️ Failed to load event stats: {e}", "warning")
-            EVENT_STATS = {'daily': {}, 'hourly': {}}
+    try:
+        daily_rows = db_get_stats('daily', 30)
+        hourly_rows = db_get_stats('hourly', 48)
+        EVENT_STATS['daily'] = {
+            r['period']: {'checks': r['checks'], 'new_events': r['new_events'], 'emails_sent': r['emails_sent']}
+            for r in daily_rows
+        }
+        EVENT_STATS['hourly'] = {
+            r['period']: {'checks': r['checks'], 'new_events': r['new_events'], 'emails_sent': r['emails_sent']}
+            for r in hourly_rows
+        }
+        console_log("📊 Event statistics loaded from database", "debug")
+    except Exception as e:
+        console_log(f"⚠️ Failed to load event stats: {e}", "warning")
+        EVENT_STATS = {'daily': {}, 'hourly': {}}
     return EVENT_STATS
 
 def save_event_stats():
-    """Save event statistics to file atomically."""
+    """Prune old stats from DB. Individual writes happen in record_stat()."""
     try:
-        # Keep only last 30 days of daily stats and 48 hours of hourly stats
-        now = datetime.now(timezone.utc)
-        cutoff_daily = (now - timedelta(days=30)).strftime('%Y-%m-%d')
-        cutoff_hourly = (now - timedelta(hours=48)).strftime('%Y-%m-%dT%H')
-        
-        EVENT_STATS['daily'] = {k: v for k, v in EVENT_STATS['daily'].items() if k >= cutoff_daily}
-        EVENT_STATS['hourly'] = {k: v for k, v in EVENT_STATS['hourly'].items() if k >= cutoff_hourly}
-        
-        atomic_json_write(EVENT_STATS_FILE, EVENT_STATS)
+        db_prune_stats()
     except Exception as e:
-        console_log(f"⚠️ Failed to save event stats: {e}", "warning")
+        console_log(f"⚠️ Failed to prune event stats: {e}", "warning")
 
 def record_stat(stat_type, value=1):
-    """Record a statistic (checks, new_events, emails_sent)."""
+    """Record a statistic (checks, new_events, emails_sent) to DB."""
     now = datetime.now(timezone.utc)
     day_key = now.strftime('%Y-%m-%d')
     hour_key = now.strftime('%Y-%m-%dT%H')
     
-    # Daily stats
-    if day_key not in EVENT_STATS['daily']:
-        EVENT_STATS['daily'][day_key] = {'checks': 0, 'new_events': 0, 'emails_sent': 0}
-    EVENT_STATS['daily'][day_key][stat_type] = EVENT_STATS['daily'][day_key].get(stat_type, 0) + value
-    
-    # Hourly stats
-    if hour_key not in EVENT_STATS['hourly']:
-        EVENT_STATS['hourly'][hour_key] = {'checks': 0, 'new_events': 0, 'emails_sent': 0}
-    EVENT_STATS['hourly'][hour_key][stat_type] = EVENT_STATS['hourly'][hour_key].get(stat_type, 0) + value
-    
-    save_event_stats()
+    try:
+        db_record_stat('daily', day_key, stat_type, value)
+        db_record_stat('hourly', hour_key, stat_type, value)
+    except Exception as e:
+        console_log(f"⚠️ Failed to record stat: {e}", "warning")
 
 # ===== THEME SETTINGS =====
-THEME_FILE = os.path.join(DATA_DIR, "theme_settings.json")
-
 def load_theme_settings():
-    """Load theme settings."""
-    if os.path.exists(THEME_FILE):
-        try:
-            with open(THEME_FILE, 'r') as f:
-                return json.load(f)
-        except Exception:
-            pass
+    """Load theme settings from DB."""
+    try:
+        raw = db_get_status('theme_settings')
+        if raw:
+            return json.loads(raw)
+    except Exception:
+        pass
     return {'theme': 'dark', 'notifications_enabled': False}
 
 def save_theme_settings(settings):
-    """Save theme settings atomically."""
+    """Save theme settings to DB."""
     try:
-        atomic_json_write(THEME_FILE, settings)
+        db_set_status('theme_settings', json.dumps(settings))
     except Exception as e:
         console_log(f"⚠️ Failed to save theme settings: {e}", "warning")
 
@@ -626,60 +618,36 @@ stop_checker = threading.Event()
 _data_lock = threading.RLock()
 
 
-def atomic_json_write(filepath: str, data) -> None:
-    """Write JSON atomically: write to temp file then rename to avoid corruption."""
-    import tempfile
-    dir_name = os.path.dirname(filepath) or '.'
-    try:
-        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
-        try:
-            with os.fdopen(fd, 'w') as f:
-                json.dump(data, f, indent=2)
-            # On Windows, os.replace is atomic and overwrites existing
-            os.replace(tmp_path, filepath)
-        except Exception:
-            # Clean up temp file on failure
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
-    except Exception as e:
-        console_log(f"⚠️ Atomic write failed for {os.path.basename(filepath)}: {e}", "warning")
-        raise
-
 
 def parse_iso_timestamp(iso_string: str) -> datetime:
     """Parse ISO 8601 timestamp string to datetime, handling 'Z' suffix."""
     if not iso_string:
         raise ValueError("Empty timestamp")
-    return parse_iso_timestamp(iso_string)
+    return datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
 
 
 # ===== RECIPIENT STATUS MANAGEMENT =====
 def load_recipient_status():
-    """Load recipient enabled/disabled status."""
-    if os.path.exists(RECIPIENT_STATUS_FILE):
-        try:
-            with open(RECIPIENT_STATUS_FILE, 'r') as f:
-                return json.load(f)
-        except Exception:
-            pass
-    
+    """Load recipient enabled/disabled status from DB."""
+    try:
+        raw = db_get_status('recipient_status')
+        if raw:
+            return json.loads(raw)
+    except Exception:
+        pass
     # Initialize all recipients as enabled
     status = {}
     for email in get_all_recipients():
         status[email] = {'enabled': True}
-    
     save_recipient_status(status)
     return status
 
 def save_recipient_status(status):
-    """Save recipient status atomically."""
+    """Save recipient status to DB."""
     try:
-        atomic_json_write(RECIPIENT_STATUS_FILE, status)
+        db_set_status('recipient_status', json.dumps(status))
     except Exception as e:
-        log_activity(f"Failed to save recipient status: {e}", "error")
+        console_log(f"Failed to save recipient status: {e}", "error")
 
 def is_recipient_enabled(email):
     """Check if recipient is enabled."""
@@ -688,45 +656,26 @@ def is_recipient_enabled(email):
 
 # ===== EMAIL HISTORY MANAGEMENT =====
 def load_email_history():
-    """Load email history."""
-    if os.path.exists(EMAIL_HISTORY_FILE):
-        try:
-            with open(EMAIL_HISTORY_FILE, 'r') as f:
-                history = json.load(f)
-                if isinstance(history, list):
-                    return history
-        except Exception:
-            pass
-    return []
+    """Load email history from database."""
+    try:
+        return db_get_email_history(500)
+    except Exception:
+        return []
 
 def save_email_history(history):
-    """Save email history atomically."""
-    try:
-        atomic_json_write(EMAIL_HISTORY_FILE, history)
-    except Exception as e:
-        log_activity(f"Failed to save email history: {e}", "error")
+    """No-op: email history is now written directly to DB."""
+    pass
 
 def add_to_email_history(recipient, subject, success, error_msg=''):
-    """Add entry to email history."""
-    history = load_email_history()
-    
-    # Keep last 500 entries
-    if len(history) > 500:
-        history = history[-500:]
-    
-    now = datetime.now(timezone.utc)
-    entry = {
-        'timestamp': now.isoformat(),
-        'timestamp_formatted': now.strftime('%b %d at %I:%M %p'),
-        'recipient': recipient,
-        'recipient_masked': mask_email(recipient),
-        'subject': sanitize_string(subject, 100),
-        'success': success,
-        'error': error_msg if not success else ''
-    }
-    
-    history.append(entry)
-    save_email_history(history)
+    """Add entry to email history in database."""
+    try:
+        db_add_email_history(
+            recipient, mask_email(recipient),
+            sanitize_string(subject, 100),
+            success, error_msg
+        )
+    except Exception as e:
+        console_log(f"\u26a0\ufe0f Failed to save email history: {e}", "warning")
 
 def format_timestamp(iso_string: str) -> str:
     """Format ISO timestamp to readable format like 'Jan 30, 2026 at 02:45 PM'."""
@@ -761,7 +710,7 @@ def get_recipients() -> list:
     return [e for e in all_recipients if is_recipient_enabled(e)]
 
 def log_activity(message: str, level: str = "info") -> None:
-    """Add activity log entry. Thread-safe."""
+    """Add activity log entry. Thread-safe. DB-backed."""
     global ACTIVITY_LOGS
     now = datetime.now(timezone.utc)
     entry = {
@@ -774,37 +723,28 @@ def log_activity(message: str, level: str = "info") -> None:
         ACTIVITY_LOGS.insert(0, entry)
         if len(ACTIVITY_LOGS) > MAX_LOGS:
             ACTIVITY_LOGS = ACTIVITY_LOGS[:MAX_LOGS]
-        logs_snapshot = ACTIVITY_LOGS[:]
     try:
-        atomic_json_write(LOGS_FILE, logs_snapshot)
+        db_add_log(sanitize_string(message, 200), level)
     except Exception:
-        pass  # console_log already called inside atomic_json_write
+        pass  # DB write failed, in-memory copy still intact
     try:
         print(f"[{level.upper()}] {message}")
     except (UnicodeEncodeError, UnicodeDecodeError):
         pass
 
 def load_admin_audit():
-    """Load admin audit log from file."""
-    if os.path.exists(ADMIN_AUDIT_FILE):
-        try:
-            with open(ADMIN_AUDIT_FILE, 'r') as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    return data
-        except Exception:
-            pass
-    return []
+    """Load admin audit log from database."""
+    try:
+        return db_get_audit_logs(300)
+    except Exception:
+        return []
 
 def save_admin_audit(entries):
-    """Save admin audit log to file atomically."""
-    try:
-        atomic_json_write(ADMIN_AUDIT_FILE, entries)
-    except Exception as e:
-        log_activity(f"Failed to save admin audit: {e}", "error")
+    """No-op: admin audit is now written directly to DB."""
+    pass
 
 def log_admin_action(action, details=None):
-    """Record an admin action for auditing."""
+    """Record an admin action for auditing (DB-backed)."""
     global ADMIN_AUDIT_LOGS
     now = datetime.now(timezone.utc)
     entry = {
@@ -817,7 +757,14 @@ def log_admin_action(action, details=None):
     ADMIN_AUDIT_LOGS.insert(0, entry)
     if len(ADMIN_AUDIT_LOGS) > MAX_ADMIN_AUDIT:
         ADMIN_AUDIT_LOGS = ADMIN_AUDIT_LOGS[:MAX_ADMIN_AUDIT]
-    save_admin_audit(ADMIN_AUDIT_LOGS)
+    try:
+        db_add_audit_log(
+            sanitize_string(action, 120),
+            sanitize_string(details or '', 200),
+            get_client_ip()
+        )
+    except Exception:
+        pass  # In-memory copy still intact
 
 _admin_alert_in_progress = False  # Guard against infinite recursion
 
@@ -826,7 +773,7 @@ def notify_admin_alert(message: str, subject: str = 'Admin Alert') -> bool:
     
     Error/status messages are sent ONLY to TELEGRAM_ADMIN_CHAT_ID.
     Regular subscribers never receive error alerts.
-    Includes recursion guard to prevent send_email -> notify_admin_alert loops.
+    Uses Telegram ONLY — never calls send_email to prevent recursion loops.
     """
     global _admin_alert_in_progress
     if _admin_alert_in_progress:
@@ -839,10 +786,7 @@ def notify_admin_alert(message: str, subject: str = 'Admin Alert') -> bool:
             success, _ = send_telegram(message, chat_id=TELEGRAM_ADMIN_CHAT_ID)
             if success:
                 return True
-            console_log("⚠️ Admin alert Telegram failed, trying email fallback", "warning")
-
-        if CONFIG.get('heartbeat_email'):
-            return send_email(subject, message, CONFIG['heartbeat_email'])
+            console_log("⚠️ Admin alert Telegram failed — no email fallback (prevents recursion)", "warning")
         return False
     finally:
         _admin_alert_in_progress = False
@@ -860,31 +804,26 @@ def record_visit():
     session['visitor_tracked'] = True
 
 def load_logs():
-    """Load activity logs from file."""
+    """Load activity logs from database."""
     global ACTIVITY_LOGS
     try:
-        if os.path.exists(LOGS_FILE):
-            with open(LOGS_FILE, 'r') as f:
-                ACTIVITY_LOGS = json.load(f)
+        ACTIVITY_LOGS = db_get_logs(200)
     except Exception:
         ACTIVITY_LOGS = []
 
 def load_status():
-    """Load tracker status."""
-    if os.path.exists(STATUS_FILE):
-        try:
-            with open(STATUS_FILE, 'r') as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {'last_daily_summary': None, 'total_checks': 0, 'last_heartbeat': None, 'last_check_time': None}
+    """Load tracker status from database."""
+    try:
+        return db_load_status()
+    except Exception:
+        return {'last_daily_summary': None, 'total_checks': 0, 'last_heartbeat': None, 'last_check_time': None}
 
 def save_status(status):
-    """Save tracker status atomically."""
+    """Save tracker status to database."""
     try:
-        atomic_json_write(STATUS_FILE, status)
+        db_save_status(status)
     except Exception as e:
-        log_activity(f"Failed to save status: {e}", "error")
+        console_log(f"\u26a0\ufe0f Failed to save status to DB: {e}", "warning")
 
 def should_send_daily_summary():
     """Check if daily summary is due based on hour and last sent date."""
@@ -908,23 +847,19 @@ def mark_daily_summary_sent():
     save_status(status)
 
 def load_seen_events() -> dict:
-    """Load seen events."""
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, 'r') as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    return {'event_ids': data, 'event_details': []}
-                return data
-        except Exception:
-            pass
-    return {'event_ids': [], 'event_details': []}
+    """Load seen events from database."""
+    try:
+        return db_load_seen_events()
+    except Exception as e:
+        console_log(f"\u26a0\ufe0f Failed to load seen events from DB: {e}", "warning")
+        return {'event_ids': [], 'event_details': []}
 
 def save_seen_events(seen_data: dict) -> None:
-    """Save seen events atomically."""
+    """Save seen events to database."""
     try:
-        atomic_json_write(DB_FILE, seen_data)
+        db_save_seen_events_bulk(seen_data)
     except Exception as e:
+        console_log(f"\u26a0\ufe0f Failed to save events to DB: {e}", "warning")
         log_activity(f"Failed to save events: {e}", "error")
 
 def fetch_events() -> list | None:
@@ -1101,7 +1036,6 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
         if should_log:
             log_activity("Gmail not configured", "error")
             set_last_smtp_error("Gmail not configured")
-            notify_admin_alert("Gmail not configured. Email delivery failed.", "Email Delivery Failure")
             LAST_GMAIL_CONFIG_LOG_AT = now
 
         add_to_email_history(recipient, subject, False, 'Gmail not configured')
@@ -1117,7 +1051,6 @@ def send_email(subject, body, to_email=None, max_retries=3, priority='normal'):
     console_log(f"📬 Queueing email for deferred retry: {mask_email(recipient)}", "info")
     add_to_email_queue(subject, body, recipient, priority)
     add_to_email_history(recipient, subject, False, f"Queued for retry: {error}")
-    notify_admin_alert(f"Email failed and queued for retry: {mask_email(recipient)}", "Email Delivery Issue")
     return False
 
 # ===== TELEGRAM BOT NOTIFICATIONS =====
@@ -1250,7 +1183,12 @@ def send_telegram_new_events(events: list) -> bool:
     
     New events are NON-ERROR messages, so they go to everyone.
     Admin also gets them so they don't miss events.
+    Respects telegram_notifications_enabled toggle.
     """
+    if not CONFIG.get('telegram_notifications_enabled', True):
+        console_log("📵 Telegram notifications disabled, skipping event alert", "debug")
+        return False
+    
     if not TELEGRAM_BOT_TOKEN:
         return False
     
@@ -1283,13 +1221,19 @@ def send_telegram_new_events(events: list) -> bool:
     
     console_log(f"📱 Sending Telegram notification for {len(events)} event(s)", "info")
     
-    # Send to ALL chat IDs (regular subscribers + admin)
-    # Build complete list: all regular IDs + admin (deduplicated)
+    # Send to ALL chat IDs (env-configured + DB subscribers + admin)
+    # Build complete list: all regular IDs + admin + DB subscribers (deduplicated)
     all_ids = set()
     if TELEGRAM_CHAT_IDS:
         all_ids.update(cid.strip() for cid in TELEGRAM_CHAT_IDS.split(',') if cid.strip())
     if TELEGRAM_ADMIN_CHAT_ID:
         all_ids.add(TELEGRAM_ADMIN_CHAT_ID)
+    # Add active DB subscribers
+    try:
+        db_sub_ids = db_get_active_subscriber_ids()
+        all_ids.update(db_sub_ids)
+    except Exception:
+        pass  # DB unavailable, use env IDs only
     
     success_count = 0
     last_error = None
@@ -1313,7 +1257,12 @@ def send_telegram_heartbeat() -> bool:
     
     Heartbeats are admin-only status messages. Regular subscribers
     should NOT receive these.
+    Respects telegram_notifications_enabled toggle.
     """
+    if not CONFIG.get('telegram_notifications_enabled', True):
+        console_log("📵 Telegram notifications disabled, skipping heartbeat", "debug")
+        return False
+    
     if not TELEGRAM_BOT_TOKEN:
         return False
     
@@ -1361,9 +1310,16 @@ def send_telegram_heartbeat() -> bool:
     return success
 
 def send_new_event_email(events):
-    """Send new event notification to enabled recipients. Uses HIGH priority for queue."""
-    # Send via Telegram first (instant, free, reliable)
+    """Send new event notification to enabled recipients. Respects notification toggles."""
+    # Send via Telegram first (instant, free, reliable) — if enabled
     telegram_success = send_telegram_new_events(events)
+    
+    # Check if email notifications are enabled
+    if not CONFIG.get('email_notifications_enabled', True):
+        console_log("📵 Email notifications disabled, skipping email send", "debug")
+        if not telegram_success:
+            console_log("⚠️ Both email and Telegram disabled — new events NOT notified!", "warning")
+        return
     
     # Also send via email
     subject = f"🎉 {len(events)} New Dubai Flea Market Event(s)!"
@@ -1389,12 +1345,17 @@ def send_new_event_email(events):
         notify_admin_alert(f"Email failed for {fail_count} recipient(s) during new event alert.", "Email Delivery Issues")
 
 def send_heartbeat():
-    """Send heartbeat status email."""
+    """Send heartbeat status email. Respects email_notifications_enabled toggle."""
     if not CONFIG['heartbeat_enabled']:
         return False
     
-    # Send via Telegram first (instant, free, reliable)
+    # Send via Telegram first (instant, free, reliable) — if enabled
     send_telegram_heartbeat()
+    
+    # Check if email notifications are enabled
+    if not CONFIG.get('email_notifications_enabled', True):
+        console_log("📵 Email notifications disabled, skipping heartbeat email", "debug")
+        return False
     
     console_log("💓 Sending heartbeat email...", "info")
     now = datetime.now(timezone.utc)
@@ -1443,7 +1404,12 @@ def send_telegram_daily_summary():
     
     Daily summaries are admin-only status reports. Regular subscribers
     should NOT receive these.
+    Respects telegram_notifications_enabled toggle.
     """
+    if not CONFIG.get('telegram_notifications_enabled', True):
+        console_log("📵 Telegram notifications disabled, skipping daily summary", "debug")
+        return False
+    
     if not TELEGRAM_BOT_TOKEN:
         return False
     
@@ -1689,6 +1655,8 @@ def background_checker():
     check_interval_seconds = CONFIG['check_interval_minutes'] * 60
     last_queue_check = datetime.now(timezone.utc)
     queue_check_interval = timedelta(minutes=15)  # Process queue every 15 minutes
+    last_error_notify_at = None  # Throttle error notifications
+    ERROR_NOTIFY_COOLDOWN = 300  # 5 minutes between error telegram notifications
     
     while not stop_checker.is_set():
         if CONFIG['tracker_enabled']:
@@ -1725,6 +1693,16 @@ def background_checker():
                         process_email_queue()
                     last_queue_check = now
                 
+            except RecursionError:
+                consecutive_errors += 1
+                log_activity(f"RecursionError in checker ({consecutive_errors}/{max_consecutive_errors})", "error")
+                console_log(f"❌ RecursionError caught — breaking recursion cycle", "error")
+                # Do NOT call notify_admin_alert here to avoid making it worse
+                # Just log and continue
+                if consecutive_errors >= max_consecutive_errors:
+                    console_log("🔄 Too many RecursionErrors, entering recovery mode (5 min cooldown)", "warning")
+                    stop_checker.wait(timeout=300)
+                    consecutive_errors = 0
             except Exception as e:
                 consecutive_errors += 1
                 error_msg = str(e)[:50]
@@ -1736,13 +1714,23 @@ def background_checker():
                 console_log(f"   └─ Full trace logged to console", "debug")
                 print(f"[FULL TRACEBACK]\n{full_trace}")
                 
-                # Send error to admin only via Telegram
-                notify_admin_alert(
-                    f"⚠️ Checker Error ({consecutive_errors}/{max_consecutive_errors})\n"
-                    f"Type: {type(e).__name__}\n"
-                    f"Error: {error_msg}",
-                    "Checker Error Alert"
-                )
+                # Throttled error notification — max once per 5 minutes
+                now_ts = datetime.now(timezone.utc)
+                should_notify = True
+                if last_error_notify_at:
+                    elapsed = (now_ts - last_error_notify_at).total_seconds()
+                    should_notify = elapsed >= ERROR_NOTIFY_COOLDOWN
+                
+                if should_notify:
+                    notify_admin_alert(
+                        f"⚠️ Checker Error ({consecutive_errors}/{max_consecutive_errors})\n"
+                        f"Type: {type(e).__name__}\n"
+                        f"Error: {error_msg}",
+                        "Checker Error Alert"
+                    )
+                    last_error_notify_at = now_ts
+                else:
+                    console_log("⚠️ Error notification throttled (cooldown active)", "debug")
                 
                 # If too many consecutive errors, wait longer before retry
                 if consecutive_errors >= max_consecutive_errors:
@@ -2348,6 +2336,22 @@ def toggle_feature(feature):
         CONFIG['daily_summary_enabled'] = not CONFIG['daily_summary_enabled']
         enabled = CONFIG['daily_summary_enabled']
         log_activity(f"🔄 Daily summary {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
+    elif feature == 'email_notifications':
+        CONFIG['email_notifications_enabled'] = not CONFIG['email_notifications_enabled']
+        enabled = CONFIG['email_notifications_enabled']
+        try:
+            db_set_notification_setting('email_notifications_enabled', enabled)
+        except Exception:
+            pass
+        log_activity(f"🔄 Email notifications {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
+    elif feature == 'telegram_notifications':
+        CONFIG['telegram_notifications_enabled'] = not CONFIG['telegram_notifications_enabled']
+        enabled = CONFIG['telegram_notifications_enabled']
+        try:
+            db_set_notification_setting('telegram_notifications_enabled', enabled)
+        except Exception:
+            pass
+        log_activity(f"🔄 Telegram notifications {'enabled' if enabled else 'disabled'}", "success" if enabled else "warning")
     
     return jsonify({'success': True, 'enabled': enabled, 'config': CONFIG})
 
@@ -2391,6 +2395,30 @@ def update_settings():
             changes.append(f"Tracker {'enabled' if new_val else 'disabled'}")
             console_log(f"🔄 Event tracker {'enabled' if new_val else 'disabled'}", "success" if new_val else "warning")
     
+    # Email notifications toggle
+    if 'email_notifications_enabled' in data:
+        new_val = bool(data['email_notifications_enabled'])
+        if CONFIG.get('email_notifications_enabled', True) != new_val:
+            CONFIG['email_notifications_enabled'] = new_val
+            try:
+                db_set_notification_setting('email_notifications_enabled', new_val)
+            except Exception:
+                pass
+            changes.append(f"Email notifications {'enabled' if new_val else 'disabled'}")
+            console_log(f"📧 Email notifications {'enabled' if new_val else 'disabled'}", "success" if new_val else "warning")
+    
+    # Telegram notifications toggle
+    if 'telegram_notifications_enabled' in data:
+        new_val = bool(data['telegram_notifications_enabled'])
+        if CONFIG.get('telegram_notifications_enabled', True) != new_val:
+            CONFIG['telegram_notifications_enabled'] = new_val
+            try:
+                db_set_notification_setting('telegram_notifications_enabled', new_val)
+            except Exception:
+                pass
+            changes.append(f"Telegram notifications {'enabled' if new_val else 'disabled'}")
+            console_log(f"📡 Telegram notifications {'enabled' if new_val else 'disabled'}", "success" if new_val else "warning")
+    
     if changes:
         log_activity(f"⚙️ Settings updated: {', '.join(changes)}", "success")
         return jsonify({'success': True, 'message': f"Updated: {', '.join(changes)}", 'config': CONFIG})
@@ -2420,6 +2448,117 @@ def toggle_recipient(email):
         'message': f'Recipient {state}',
         'enabled': status[email]['enabled']
     })
+
+# ===== TELEGRAM SUBSCRIBER MANAGEMENT API =====
+
+@app.route('/api/telegram-subscribers', methods=['GET'])
+@rate_limit
+@require_password
+def get_telegram_subscribers():
+    """Get list of Telegram subscribers with masked IDs."""
+    try:
+        subscribers = db_get_subscribers()
+        masked = []
+        for sub in subscribers:
+            masked.append({
+                'chat_id_masked': mask_chat_id(sub['chat_id']),
+                'chat_id_short': sub['chat_id'][-4:],  # last 4 digits for identification
+                'label': sub.get('display_name', ''),
+                'active': sub.get('is_active', True),
+                'added_at': sub.get('added_at', ''),
+                'last_notified': sub.get('last_notified_at', '')
+            })
+        
+        # Also include env-configured chat IDs
+        env_ids = []
+        env_chat_list = [cid.strip() for cid in TELEGRAM_CHAT_IDS.split(',') if cid.strip()] if TELEGRAM_CHAT_IDS else []
+        for cid in env_chat_list:
+            env_ids.append({
+                'chat_id_masked': mask_chat_id(cid),
+                'chat_id_short': cid[-4:] if len(cid) >= 4 else cid,
+                'source': 'env',
+                'label': 'Admin' if cid == TELEGRAM_ADMIN_CHAT_ID else 'Env Config'
+            })
+        
+        return jsonify({
+            'success': True,
+            'db_subscribers': masked,
+            'env_subscribers': env_ids,
+            'total_db': len(subscribers),
+            'total_env': len(env_ids)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:100]}), 500
+
+@app.route('/api/telegram-subscribers/add', methods=['POST'])
+@rate_limit
+@require_password
+def add_telegram_subscriber():
+    """Add a new Telegram subscriber. Requires admin."""
+    try:
+        data = request.get_json() or {}
+        chat_id = str(data.get('chat_id', '')).strip()
+        label = str(data.get('label', '')).strip()[:50]
+        
+        if not chat_id:
+            return jsonify({'success': False, 'error': 'chat_id is required'}), 400
+        
+        if not validate_chat_id(chat_id):
+            return jsonify({'success': False, 'error': 'Invalid chat_id format'}), 400
+        
+        success = db_add_subscriber(chat_id, label)
+        if success:
+            log_activity(f"📱 Telegram subscriber added: {mask_chat_id(chat_id)}", "success")
+            log_admin_action("Add Telegram subscriber", f"Chat ID: {mask_chat_id(chat_id)}, Label: {label}")
+            return jsonify({'success': True, 'message': f'Subscriber {mask_chat_id(chat_id)} added'})
+        else:
+            return jsonify({'success': False, 'error': 'Subscriber already exists'}), 409
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:100]}), 500
+
+@app.route('/api/telegram-subscribers/remove', methods=['POST'])
+@rate_limit
+@require_password
+def remove_telegram_subscriber():
+    """Remove a Telegram subscriber by chat_id."""
+    try:
+        data = request.get_json() or {}
+        chat_id = str(data.get('chat_id', '')).strip()
+        
+        if not chat_id:
+            return jsonify({'success': False, 'error': 'chat_id is required'}), 400
+        
+        success = db_remove_subscriber(chat_id)
+        if success:
+            log_activity(f"📱 Telegram subscriber removed: {mask_chat_id(chat_id)}", "warning")
+            log_admin_action("Remove Telegram subscriber", f"Chat ID: {mask_chat_id(chat_id)}")
+            return jsonify({'success': True, 'message': 'Subscriber removed'})
+        else:
+            return jsonify({'success': False, 'error': 'Subscriber not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:100]}), 500
+
+@app.route('/api/telegram-subscribers/toggle', methods=['POST'])
+@rate_limit
+@require_password
+def toggle_telegram_subscriber():
+    """Toggle a subscriber active/inactive."""
+    try:
+        data = request.get_json() or {}
+        chat_id = str(data.get('chat_id', '')).strip()
+        
+        if not chat_id:
+            return jsonify({'success': False, 'error': 'chat_id is required'}), 400
+        
+        new_state = db_toggle_subscriber(chat_id)
+        if new_state is not None:
+            state_str = 'activated' if new_state else 'deactivated'
+            log_activity(f"📱 Telegram subscriber {state_str}: {mask_chat_id(chat_id)}", "success")
+            return jsonify({'success': True, 'active': new_state, 'message': f'Subscriber {state_str}'})
+        else:
+            return jsonify({'success': False, 'error': 'Subscriber not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:100]}), 500
 
 @app.route('/api/check-now', methods=['POST'])
 @rate_limit
@@ -2790,9 +2929,9 @@ If you received this email, your notification setup is working correctly!
 def test_new_event():
     """Remove latest event from DB and trigger a real 'new event' notification.
     This tests the full notification flow by:
-    1. Removing the most recent event from seen_events.json
+    1. Removing the most recent event from the database
     2. Immediately triggering an API check
-    3. The event will be detected as 'new' and emails sent to all recipients
+    3. The event will be detected as 'new' and notifications sent to all recipients
     """
     console_log("⚡ TEST NEW EVENT: Starting real notification test...", "warning")
     log_activity("⚡ Test new event notification triggered", "warning")
@@ -3257,6 +3396,39 @@ load_recipient_status()
 load_event_stats()
 load_admin_audit_on_startup()
 
+# ===== DATABASE INITIALIZATION =====
+try:
+    _db_conn = get_connection()  # initializes tables on first call
+    _db_info = get_db_status()
+    console_log(f"\U0001f5c4\ufe0f Database: {_db_info.get('backend', 'unknown')} - Connected", "success")
+except Exception as _db_err:
+    console_log(f"\u26a0\ufe0f Database init failed: {_db_err} - falling back to JSON", "error")
+
+# Load notification toggle settings from DB into CONFIG
+try:
+    all_settings = db_get_all_notification_settings()
+    for key, enabled in all_settings.items():
+        CONFIG[key] = enabled
+    console_log(f"\U0001f514 Notification settings loaded: email={CONFIG.get('email_notifications_enabled', True)}, telegram={CONFIG.get('telegram_notifications_enabled', True)}", "debug")
+except Exception:
+    pass  # Defaults already set in CONFIG
+
+# One-time migration from JSON to DB (safe to run multiple times)
+try:
+    _migration_marker = os.path.join(DATA_DIR, '.migrated_to_db')
+    if not os.path.exists(_migration_marker):
+        _summary = migrate_from_json(DATA_DIR)
+        if _summary.get('migrated'):
+            console_log(f"\U0001f4e6 JSON->DB migration complete: {_summary['migrated']}", "success")
+            # Create marker so we don't re-migrate on every restart
+            with open(_migration_marker, 'w') as _f:
+                _f.write(datetime.now(timezone.utc).isoformat())
+        if _summary.get('errors'):
+            for _err in _summary['errors']:
+                console_log(f"\u26a0\ufe0f Migration warning: {_err}", "warning")
+except Exception as _mig_err:
+    console_log(f"\u26a0\ufe0f Migration check failed: {_mig_err}", "warning")
+
 # ===== STARTUP CONSOLE MESSAGES =====
 console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
 console_log("🚀 DUBAI FLEA MARKET EVENT TRACKER STARTING...", "info")
@@ -3267,6 +3439,13 @@ console_log(f"💓 Heartbeat: Every {CONFIG['heartbeat_hours']} hours", "debug")
 console_log(f"👥 Recipients configured: {len(get_all_recipients())}", "debug")
 console_log(f"📊 Event stats loaded: {len(EVENT_STATS.get('daily', {}))} days of data", "debug")
 console_log(f"📱 Telegram Admin: {'Configured' if TELEGRAM_ADMIN_CHAT_ID else 'Not set'}", "debug")
+try:
+    _sub_count = db_get_subscriber_count()
+    console_log(f"📱 Telegram DB Subscribers: {_sub_count}", "debug")
+except Exception:
+    pass
+console_log(f"📧 Email notifications: {'ON' if CONFIG.get('email_notifications_enabled', True) else 'OFF'}", "debug")
+console_log(f"📡 Telegram notifications: {'ON' if CONFIG.get('telegram_notifications_enabled', True) else 'OFF'}", "debug")
 
 # Security warnings
 if not ADMIN_PASSWORD:

@@ -243,8 +243,10 @@ function saveSettings() {
     const heartbeatEnabled = document.getElementById('settings-heartbeat')?.checked ?? true;
     const dailySummaryEnabled = document.getElementById('settings-daily-summary')?.checked ?? true;
     const trackerEnabled = document.getElementById('settings-tracker')?.checked ?? true;
+    const emailNotificationsEnabled = document.getElementById('settings-email-notifications')?.checked ?? true;
+    const telegramNotificationsEnabled = document.getElementById('settings-telegram-notifications')?.checked ?? true;
     
-    console.log('[DEBUG] Settings values:', { heartbeatEnabled, dailySummaryEnabled, trackerEnabled });
+    console.log('[DEBUG] Settings values:', { heartbeatEnabled, dailySummaryEnabled, trackerEnabled, emailNotificationsEnabled, telegramNotificationsEnabled });
     
     // Close settings modal first
     closeSettingsModal();
@@ -253,7 +255,9 @@ function saveSettings() {
     secureAction('/api/settings', 'Settings saved successfully!', {
         heartbeat_enabled: heartbeatEnabled,
         daily_summary_enabled: dailySummaryEnabled,
-        tracker_enabled: trackerEnabled
+        tracker_enabled: trackerEnabled,
+        email_notifications_enabled: emailNotificationsEnabled,
+        telegram_notifications_enabled: telegramNotificationsEnabled
     });
 }
 
