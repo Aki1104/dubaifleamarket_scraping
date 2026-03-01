@@ -21,9 +21,12 @@ import secrets
 import threading
 from datetime import datetime, timezone, timedelta
 
+from typing import Any
+
 # ---------- Try to import libsql for Turso cloud ----------
+libsql: Any
 try:
-    import libsql_experimental as libsql
+    import libsql_experimental as libsql  # type: ignore[import-unresolved]
     HAS_LIBSQL = True
 except (ImportError, OSError, Exception) as _imp_err:
     HAS_LIBSQL = False
