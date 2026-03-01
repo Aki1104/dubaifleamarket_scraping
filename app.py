@@ -168,6 +168,35 @@ start_background_checker()
 start_watchdog()
 
 
+# ===== AUTO-REGISTER TELEGRAM WEBHOOK (background, after boot) =====
+def _setup_telegram_webhook():
+    """Register the Telegram webhook so the bot can receive /start, /subscribe, etc."""
+    import time as _time
+    _time.sleep(10)  # Wait for app to be reachable
+    from config import TELEGRAM_BOT_TOKEN as _token
+    render_url = os.environ.get('RENDER_EXTERNAL_URL', '')
+    if not _token or not render_url:
+        console_log("⚠️ Telegram webhook skipped (no token or RENDER_EXTERNAL_URL)", "debug")
+        return
+    webhook_url = f"{render_url.rstrip('/')}/api/telegram-webhook"
+    try:
+        import requests as _req
+        resp = _req.post(
+            f"https://api.telegram.org/bot{_token}/setWebhook",
+            json={'url': webhook_url, 'allowed_updates': ['message']},
+            timeout=15,
+        )
+        result = resp.json()
+        if result.get('ok'):
+            console_log(f"📱 Telegram webhook auto-registered: {webhook_url}", "success")
+        else:
+            console_log(f"⚠️ Telegram webhook setup failed: {result.get('description', '?')}", "warning")
+    except Exception as _e:
+        console_log(f"⚠️ Telegram webhook setup error: {_e}", "warning")
+
+threading.Thread(target=_setup_telegram_webhook, daemon=True, name='tg-webhook').start()
+
+
 # ===== ENTRY POINT =====
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

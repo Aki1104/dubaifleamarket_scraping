@@ -31,9 +31,19 @@ from state import (
 @app.route('/')
 def index():
     """Client-facing landing page."""
+    from config import CONFIG, VISITOR_LOG
+    from state import load_seen_events
     now = datetime.now(timezone.utc)
     record_visit()
-    return render_template('index.html', current_year=now.year)
+    seen_data = load_seen_events()
+    return render_template(
+        'index.html',
+        current_year=now.year,
+        total_checks=CONFIG.get('total_checks', 0),
+        emails_sent=CONFIG.get('emails_sent', 0),
+        seen_count=len(seen_data.get('event_ids', [])),
+        visitors_24h=len(VISITOR_LOG),
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])

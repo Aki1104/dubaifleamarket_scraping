@@ -738,6 +738,191 @@ def toggle_telegram_subscriber():
         return jsonify({'success': False, 'error': str(e)[:100]}), 500
 
 
+# ===== Telegram Bot Webhook (Interactive Commands) =====
+
+def _tg_reply(chat_id: str, text: str):
+    """Send a reply message back to a Telegram chat."""
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        import requests as _req
+        _req.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML',
+                  'disable_web_page_preview': True},
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
+@app.route(f'/api/telegram-webhook', methods=['POST'])
+def telegram_webhook():
+    """Handle incoming Telegram bot updates (commands from users)."""
+    try:
+        data = request.get_json(silent=True) or {}
+        message = data.get('message', {})
+        if not message:
+            return jsonify({'ok': True})
+
+        chat_id = str(message.get('chat', {}).get('id', ''))
+        text = (message.get('text') or '').strip()
+        first_name = message.get('from', {}).get('first_name', 'there')
+        username = message.get('from', {}).get('username', '')
+
+        if not chat_id or not text:
+            return jsonify({'ok': True})
+
+        cmd = text.split()[0].lower().split('@')[0]  # handle /start@botname
+
+        if cmd == '/start':
+            welcome = (
+                f"👋 <b>Welcome, {first_name}!</b>\n\n"
+                "🏪 I'm the <b>Dubai Flea Market Tracker Bot</b>.\n"
+                "I'll notify you instantly when new events are posted "
+                "on the Dubai Flea Market website.\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "📌 <b>Available Commands:</b>\n\n"
+                "/subscribe — Subscribe to event alerts\n"
+                "/unsubscribe — Stop receiving alerts\n"
+                "/status — View bot & tracker stats\n"
+                "/events — See recently tracked events\n"
+                "/help — Show this help message\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "💡 <i>Use /subscribe to start getting new event notifications!</i>"
+            )
+            _tg_reply(chat_id, welcome)
+
+        elif cmd == '/help':
+            _tg_reply(chat_id, (
+                "ℹ️ <b>Dubai Flea Market Tracker — Help</b>\n\n"
+                "/subscribe — Subscribe to new event alerts\n"
+                "/unsubscribe — Unsubscribe from alerts\n"
+                "/status — View tracker statistics\n"
+                "/events — See recent events found\n"
+                "/myid — Show your Telegram chat ID\n"
+                "/help — Show this help message\n\n"
+                "🌐 <a href=\"https://dubai-fleamarket.com\">Dubai Flea Market Website</a>"
+            ))
+
+        elif cmd == '/subscribe':
+            if not validate_chat_id(chat_id):
+                _tg_reply(chat_id, "❌ Could not validate your chat ID.")
+                return jsonify({'ok': True})
+            display_name = username or first_name or ''
+            added = db_add_subscriber(chat_id, display_name, added_by='self')
+            if added:
+                _tg_reply(chat_id, (
+                    "✅ <b>Subscribed successfully!</b>\n\n"
+                    "You'll receive instant notifications when new "
+                    "Dubai Flea Market events are posted.\n\n"
+                    "Use /unsubscribe to stop at any time."
+                ))
+                log_activity(f"📱 New Telegram subscriber via /subscribe: {mask_chat_id(chat_id)}", "success")
+                # Notify admin
+                notify_admin_alert(
+                    f"📱 New subscriber joined via /subscribe\n"
+                    f"Name: {first_name}\nUsername: @{username or 'none'}\n"
+                    f"Chat ID: {mask_chat_id(chat_id)}",
+                    "New Subscriber"
+                )
+            else:
+                _tg_reply(chat_id, "ℹ️ You're already subscribed! Use /unsubscribe to stop.")
+
+        elif cmd == '/unsubscribe':
+            removed = db_remove_subscriber(chat_id)
+            if removed:
+                _tg_reply(chat_id, (
+                    "👋 <b>Unsubscribed.</b>\n\n"
+                    "You won't receive event notifications anymore.\n"
+                    "Use /subscribe to re-subscribe at any time."
+                ))
+                log_activity(f"📱 Telegram subscriber left via /unsubscribe: {mask_chat_id(chat_id)}", "warning")
+            else:
+                _tg_reply(chat_id, "ℹ️ You're not currently subscribed. Use /subscribe to join.")
+
+        elif cmd == '/status':
+            seen_data = load_seen_events()
+            sub_count = 0
+            try:
+                sub_count = db_get_subscriber_count()
+            except Exception:
+                pass
+            _tg_reply(chat_id, (
+                "📊 <b>Tracker Status</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"✅ Status: <b>Running</b>\n"
+                f"🔍 Total checks: {CONFIG.get('total_checks', 0)}\n"
+                f"📦 Events tracked: {len(seen_data.get('event_ids', []))}\n"
+                f"🆕 New events found: {CONFIG.get('total_new_events', 0)}\n"
+                f"📬 Notifications sent: {CONFIG.get('emails_sent', 0)}\n"
+                f"👥 Subscribers: {sub_count}\n"
+                f"⏰ Check interval: Every {CONFIG.get('check_interval_minutes', 15)} min\n\n"
+                "🌐 <a href=\"https://dubai-fleamarket.com\">View Events →</a>"
+            ))
+
+        elif cmd == '/events':
+            seen_data = load_seen_events()
+            details = seen_data.get('event_details', [])
+            if details:
+                recent = details[-5:][::-1]
+                lines = ["📋 <b>Recent Events</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+                for i, ev in enumerate(recent, 1):
+                    title = (ev.get('title') or ev.get('name') or 'Untitled')[:60]
+                    link = ev.get('link') or ev.get('url') or ''
+                    lines.append(f"{i}. <a href=\"{link}\">{title}</a>")
+                lines.append("\n🌐 <a href=\"https://dubai-fleamarket.com\">View All →</a>")
+                _tg_reply(chat_id, '\n'.join(lines))
+            else:
+                _tg_reply(chat_id, "📋 No events tracked yet. Check back soon!")
+
+        elif cmd == '/myid':
+            _tg_reply(chat_id, f"🆔 Your Telegram Chat ID is:\n<code>{chat_id}</code>")
+
+        else:
+            _tg_reply(chat_id, (
+                "🤔 Unknown command. Try /help to see available commands."
+            ))
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        console_log(f"⚠️ Telegram webhook error: {str(e)[:80]}", "error")
+        return jsonify({'ok': True})  # Always return 200 to Telegram
+
+
+@app.route('/api/telegram-webhook/setup', methods=['POST'])
+@rate_limit
+@require_password
+def setup_telegram_webhook():
+    """Register the webhook URL with Telegram. Admin-only."""
+    try:
+        if not TELEGRAM_BOT_TOKEN:
+            return jsonify({'success': False, 'error': 'Bot token not configured'}), 400
+
+        # Build webhook URL from request host or provided URL
+        data = request.get_json(silent=True) or {}
+        webhook_url = data.get('url', '').strip()
+        if not webhook_url:
+            host = request.host_url.rstrip('/')
+            webhook_url = f"{host}/api/telegram-webhook"
+
+        import requests as _req
+        resp = _req.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook",
+            json={'url': webhook_url, 'allowed_updates': ['message']},
+            timeout=15,
+        )
+        result = resp.json()
+
+        if result.get('ok'):
+            log_activity(f"📱 Telegram webhook registered: {webhook_url[:50]}...", "success")
+            return jsonify({'success': True, 'message': 'Webhook registered', 'url': webhook_url})
+        else:
+            return jsonify({'success': False, 'error': result.get('description', 'Unknown error')}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:100]}), 500
+
+
 # ===== Manual Actions =====
 
 @app.route('/api/check-now', methods=['POST'])
