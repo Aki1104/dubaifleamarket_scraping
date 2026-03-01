@@ -76,6 +76,47 @@ def api_events():
 
 # ===== Status / Diagnostics =====
 
+@app.route('/api/public-stats')
+@rate_limit
+def api_public_stats():
+    """Public-safe stats for the landing page — no sensitive internal data."""
+    seen_data = load_seen_events()
+
+    # Build recent events (safe public fields only)
+    recent_events = []
+    event_details = seen_data.get('event_details', [])
+    if isinstance(event_details, list) and event_details:
+        for event in event_details[-6:][::-1]:
+            if not isinstance(event, dict):
+                continue
+            recent_events.append({
+                'id': event.get('id') or event.get('event_id'),
+                'title': event.get('title') or event.get('name'),
+                'first_seen': event.get('first_seen') or event.get('timestamp'),
+                'link': event.get('link') or event.get('url'),
+            })
+
+    # Safe console feed — only msg + time_short, no internal diagnostics
+    safe_console = [
+        {'msg': entry.get('msg', ''), 'time_short': entry.get('time_short', '')}
+        for entry in config.SYSTEM_CONSOLE[:10]
+        if isinstance(entry, dict) and entry.get('msg')
+    ]
+
+    return jsonify({
+        'total_checks': CONFIG.get('total_checks', 0),
+        'emails_sent': CONFIG.get('emails_sent', 0),
+        'seen_count': len(seen_data.get('event_ids', [])),
+        'email_queue_count': len(config.EMAIL_QUEUE),
+        'latest_event': get_latest_event_summary(),
+        'recent_events': recent_events,
+        'visitor_stats': {
+            'last_24h': len(config.VISITOR_LOG),
+        },
+        'console': safe_console,
+    })
+
+
 @app.route('/api/status')
 @rate_limit
 @require_admin

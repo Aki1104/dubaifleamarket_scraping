@@ -7,6 +7,8 @@
     <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Suppress Tailwind Play CDN advisory — intentionally used for demo/portfolio without a build step -->
+    <script>(function(){var w=console.warn.bind(console);console.warn=function(){if(typeof arguments[0]==='string'&&arguments[0].includes('cdn.tailwindcss.com'))return;w.apply(console,arguments);};})()</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -453,14 +455,12 @@
         const storedTheme = localStorage.getItem('theme');
         setTheme(storedTheme || 'light');
 
-        function updateClientStatus() {
-            fetch('/api/status')
+        function updatePublicStats() {
+            fetch('/api/public-stats')
                 .then(response => response.json())
                 .then(data => {
-                    if (data.config) {
-                        document.getElementById('metric-total-checks').textContent = data.config.total_checks ?? '--';
-                        document.getElementById('metric-emails').textContent = data.config.emails_sent ?? '--';
-                    }
+                    document.getElementById('metric-total-checks').textContent = data.total_checks ?? '--';
+                    document.getElementById('metric-emails').textContent = data.emails_sent ?? '--';
                     document.getElementById('metric-events').textContent = data.seen_count ?? '--';
                     document.getElementById('metric-queue').textContent = data.email_queue_count ?? '--';
 
@@ -480,8 +480,43 @@
                     if (data.visitor_stats) {
                         document.getElementById('metric-visitors').textContent = data.visitor_stats.last_24h ?? '--';
                     }
+
+                    // Live activity feed
+                    const feed = document.getElementById('live-feed-body');
+                    if (feed && Array.isArray(data.console) && data.console.length > 0) {
+                        const rows = data.console.slice(0, 6).map(log => {
+                            const timeLabel = log.time_short || '--:--';
+                            const icon = pickFeedIcon(log.msg);
+                            const safeMsg = escapeHtml(log.msg);
+                            return `
+                                <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi ${icon}"></i></span>
+                                    <span class="min-w-0 flex-1">${safeMsg}</span>
+                                    <span class="text-xs text-slate-500">${timeLabel}</span>
+                                </div>
+                            `;
+                        }).join('');
+                        feed.innerHTML = rows;
+                    }
                 })
                 .catch(() => {});
+        }
+
+        function pickFeedIcon(msg) {
+            const lower = (msg || '').toLowerCase();
+            if (lower.includes('scan') || lower.includes('checking')) return 'bi-search';
+            if (lower.includes('telegram')) return 'bi-telegram';
+            if (lower.includes('heartbeat') || lower.includes('pulse')) return 'bi-heart-pulse';
+            if (lower.includes('email') || lower.includes('mail')) return 'bi-envelope-check';
+            if (lower.includes('event') || lower.includes('listing')) return 'bi-calendar-event';
+            if (lower.includes('alert') || lower.includes('notify')) return 'bi-bell';
+            if (lower.includes('error') || lower.includes('fail')) return 'bi-exclamation-triangle';
+            if (lower.includes('queue')) return 'bi-inbox';
+            if (lower.includes('api') || lower.includes('response')) return 'bi-globe';
+            if (lower.includes('save') || lower.includes('data') || lower.includes('snapshot')) return 'bi-database-check';
+            if (lower.includes('security') || lower.includes('auth')) return 'bi-shield-check';
+            if (lower.includes('success') || lower.includes('ok')) return 'bi-patch-check';
+            return 'bi-check-circle';
         }
 
         function renderRecentEvents(events) {
@@ -511,62 +546,7 @@
             list.innerHTML = rows;
         }
 
-        function updateClientFeed() {
-            fetch('/api/console')
-                .then(response => response.json())
-                .then(data => {
-                    const feed = document.getElementById('live-feed-body');
-                    if (!feed || !data.console) return;
 
-                    const iconMap = {
-                        'scan': 'bi-search',
-                        'check': 'bi-check-circle',
-                        'event': 'bi-calendar-event',
-                        'telegram': 'bi-telegram',
-                        'email': 'bi-envelope-check',
-                        'heartbeat': 'bi-heart-pulse',
-                        'alert': 'bi-bell',
-                        'error': 'bi-exclamation-triangle',
-                        'success': 'bi-patch-check',
-                        'api': 'bi-globe',
-                        'queue': 'bi-inbox',
-                        'data': 'bi-database-check',
-                        'security': 'bi-shield-check'
-                    };
-
-                    function pickIcon(msg) {
-                        const lower = (msg || '').toLowerCase();
-                        if (lower.includes('scan') || lower.includes('checking')) return iconMap.scan;
-                        if (lower.includes('telegram')) return iconMap.telegram;
-                        if (lower.includes('heartbeat') || lower.includes('pulse')) return iconMap.heartbeat;
-                        if (lower.includes('email') || lower.includes('mail')) return iconMap.email;
-                        if (lower.includes('event') || lower.includes('listing')) return iconMap.event;
-                        if (lower.includes('alert') || lower.includes('notify')) return iconMap.alert;
-                        if (lower.includes('error') || lower.includes('fail')) return iconMap.error;
-                        if (lower.includes('queue')) return iconMap.queue;
-                        if (lower.includes('api') || lower.includes('response')) return iconMap.api;
-                        if (lower.includes('save') || lower.includes('data') || lower.includes('snapshot')) return iconMap.data;
-                        if (lower.includes('security') || lower.includes('auth')) return iconMap.security;
-                        if (lower.includes('success') || lower.includes('ok')) return iconMap.success;
-                        return iconMap.check;
-                    }
-
-                    const rows = data.console.slice(0, 6).map(log => {
-                        const timeLabel = log.time_short || '--:--';
-                        const icon = pickIcon(log.msg);
-                        const safeMsg = escapeHtml(log.msg);
-                        return `
-                            <div class="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">
-                                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700"><i class="bi ${icon}"></i></span>
-                                <span class="min-w-0 flex-1">${safeMsg}</span>
-                                <span class="text-xs text-slate-500">${timeLabel}</span>
-                            </div>
-                        `;
-                    }).join('');
-                    feed.innerHTML = rows;
-                })
-                .catch(() => {});
-        }
 
         function escapeHtml(text) {
             if (!text) return '';
@@ -575,10 +555,8 @@
             });
         }
 
-        updateClientStatus();
-        updateClientFeed();
-        setInterval(updateClientStatus, 15000);
-        setInterval(updateClientFeed, 8000);
+        updatePublicStats();
+        setInterval(updatePublicStats, 15000);
 
         document.querySelectorAll('#mobile-menu a').forEach(link => {
             link.addEventListener('click', closeNavOnClick);
