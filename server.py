@@ -1,4 +1,4 @@
-"""
+""" 
 =============================================================================
 🚀 PRODUCTION SERVER — Waitress (pure Python, no worker timeouts)
 =============================================================================
@@ -13,7 +13,7 @@ import sys
 
 def main():
     port = int(os.environ.get('PORT', 10000))
-    print(f"[SERVER] Starting waitress on 0.0.0.0:{port} ...")
+    print(f"[SERVER] Starting on 0.0.0.0:{port} ...")
     sys.stdout.flush()
 
     # Import app AFTER printing — so if import hangs, we at least see the log
@@ -22,8 +22,13 @@ def main():
     print(f"[SERVER] App imported — serving on http://0.0.0.0:{port}")
     sys.stdout.flush()
 
-    from waitress import serve
-    serve(app, host='0.0.0.0', port=port, threads=4)
+    try:
+        from waitress import serve
+        serve(app, host='0.0.0.0', port=port, threads=4)
+    except ImportError:
+        print("[SERVER] waitress not installed — using Flask dev server")
+        sys.stdout.flush()
+        app.run(host='0.0.0.0', port=port, debug=False)
 
 
 if __name__ == '__main__':
