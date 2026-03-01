@@ -207,6 +207,8 @@ def check_for_events() -> None:
 
     status = load_status()
     status['total_checks'] = CONFIG['total_checks']
+    status['total_new_events'] = CONFIG.get('total_new_events', 0)
+    status['emails_sent'] = CONFIG.get('emails_sent', 0)
     status['last_check_time'] = CONFIG['last_check']
     save_status(status)
 

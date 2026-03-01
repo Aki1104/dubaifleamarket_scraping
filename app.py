@@ -29,7 +29,7 @@ except ImportError:
 # ── Core config & Flask app ──────────────────────────────────────────────
 from config import (
     app, CONFIG, DATA_DIR, API_URL, EVENT_STATS,
-    TELEGRAM_ADMIN_CHAT_ID,
+    TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_CHAT_IDS,
 )
 
 # ── Utilities (registers after_request hooks on import) ──────────────────
@@ -55,6 +55,7 @@ import routes_api    # noqa: F401
 from db import (
     get_connection, get_db_status, migrate_from_json,
     db_get_all_notification_settings, db_get_subscriber_count,
+    db_add_subscriber, validate_chat_id,
 )
 
 
@@ -63,6 +64,25 @@ load_logs()
 load_recipient_status()
 load_event_stats()
 load_admin_audit_on_startup()
+
+# Restore runtime counters from DB so they survive restarts
+from state import load_status as _load_status
+try:
+    _saved_status = _load_status()
+    for _key in ('total_checks', 'total_new_events', 'emails_sent'):
+        _val = _saved_status.get(_key)
+        if _val is not None:
+            try:
+                CONFIG[_key] = int(_val)
+            except (ValueError, TypeError):
+                pass
+    console_log(
+        f"📊 Restored counters: checks={CONFIG['total_checks']}, "
+        f"events={CONFIG['total_new_events']}, emails={CONFIG['emails_sent']}",
+        "debug",
+    )
+except Exception as _e:
+    console_log(f"⚠️ Could not restore counters from DB: {_e}", "warning")
 
 # ===== DATABASE INITIALIZATION =====
 try:
@@ -100,6 +120,23 @@ try:
                 console_log(f"\u26a0\ufe0f Migration warning: {_err}", "warning")
 except Exception as _mig_err:
     console_log(f"\u26a0\ufe0f Migration check failed: {_mig_err}", "warning")
+
+# Seed env-configured Telegram chat IDs into the DB so they appear in the
+# subscriber list and get used for notifications even without manual "add".
+try:
+    _seeded = 0
+    for _raw_id in (TELEGRAM_CHAT_IDS or '').split(','):
+        _cid = _raw_id.strip()
+        if _cid and validate_chat_id(_cid):
+            if db_add_subscriber(_cid, 'Env Config', added_by='env'):
+                _seeded += 1
+    if TELEGRAM_ADMIN_CHAT_ID and validate_chat_id(TELEGRAM_ADMIN_CHAT_ID):
+        if db_add_subscriber(TELEGRAM_ADMIN_CHAT_ID, 'Admin', added_by='env'):
+            _seeded += 1
+    if _seeded:
+        console_log(f"\U0001f4f1 Seeded {_seeded} Telegram subscriber(s) from env", "success")
+except Exception as _seed_err:
+    console_log(f"\u26a0\ufe0f Telegram subscriber seeding failed: {_seed_err}", "warning")
 
 
 # ===== STARTUP CONSOLE MESSAGES =====
