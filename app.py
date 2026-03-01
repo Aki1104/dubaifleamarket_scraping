@@ -52,6 +52,11 @@ from events import start_background_checker, start_watchdog
 import routes_pages  # noqa: F401
 import routes_api    # noqa: F401
 
+# ── Lightweight health check (no DB — just proves the port is open) ─────
+@app.route('/health')
+def health_check():
+    return 'ok', 200
+
 # ── Database ────────────────────────────────────────────────────────────
 from db import (
     get_connection, get_db_status, migrate_from_json,
@@ -139,40 +144,8 @@ def _init_db_and_state():
         console_log(f"🚨 DB init thread crashed: {_fatal}", "error")
 
 
-# Fire-and-forget: DB init runs entirely in the background.
-# Gunicorn can bind the port without waiting.
-threading.Thread(target=_init_db_and_state, daemon=True, name='db-init').start()
-
-# ===== STARTUP CONSOLE MESSAGES (no DB calls — instant) =====
-console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
-console_log("🚀 DUBAI FLEA MARKET EVENT TRACKER STARTING...", "info")
-console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
-console_log(f"📡 API Endpoint: {API_URL}", "debug")
-console_log(f"⏰ Check Interval: {CONFIG['check_interval_minutes']} minutes", "debug")
-console_log(f"💓 Heartbeat: Every {CONFIG['heartbeat_hours']} hours", "debug")
-console_log(f"📱 Telegram Admin: {'Configured' if TELEGRAM_ADMIN_CHAT_ID else 'Not set'}", "debug")
-console_log(f"📧 Email notifications: {'ON' if CONFIG.get('email_notifications_enabled', True) else 'OFF'}", "debug")
-console_log(f"📡 Telegram notifications: {'ON' if CONFIG.get('telegram_notifications_enabled', True) else 'OFF'}", "debug")
-
-from config import ADMIN_PASSWORD
-if not ADMIN_PASSWORD:
-    console_log("🚨 WARNING: ADMIN_PASSWORD not set!", "error")
-if not CONFIG.get('heartbeat_email'):
-    console_log("⚠️ HEARTBEAT_EMAIL not set.", "warning")
-
-console_log("✅ App module loaded — ready for gunicorn to bind port", "success")
-console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
-
-# ===== START BACKGROUND THREADS =====
-start_background_checker()
-start_watchdog()
-
-
-# ===== AUTO-REGISTER TELEGRAM WEBHOOK (background, after boot) =====
 def _setup_telegram_webhook():
     """Register the Telegram webhook so the bot can receive /start, /subscribe, etc."""
-    import time as _time
-    _time.sleep(10)  # Wait for app to be reachable
     from config import TELEGRAM_BOT_TOKEN as _token
     render_url = os.environ.get('RENDER_EXTERNAL_URL', '')
     if not _token or not render_url:
@@ -194,10 +167,65 @@ def _setup_telegram_webhook():
     except Exception as _e:
         console_log(f"⚠️ Telegram webhook setup error: {_e}", "warning")
 
-threading.Thread(target=_setup_telegram_webhook, daemon=True, name='tg-webhook').start()
+
+# ==========================================================================
+# ALL BACKGROUND WORK — deferred until 5s after import so the server is
+# already bound and serving before any DB / network call runs.
+# ==========================================================================
+def _deferred_startup():
+    """Runs in a daemon thread AFTER the WSGI server is already listening."""
+    import time as _time
+    _time.sleep(5)  # Give the server time to bind the port
+
+    # ---- 1. DB + State init ----
+    try:
+        _init_db_and_state()
+    except Exception as _e:
+        console_log(f"🚨 DB init failed: {_e}", "error")
+
+    # ---- 2. Background checker & watchdog ----
+    try:
+        start_background_checker()
+    except Exception as _e:
+        console_log(f"🚨 Background checker failed to start: {_e}", "error")
+    try:
+        start_watchdog()
+    except Exception as _e:
+        console_log(f"🚨 Watchdog failed to start: {_e}", "error")
+
+    # ---- 3. Telegram webhook (another 5s delay) ----
+    _time.sleep(5)
+    try:
+        _setup_telegram_webhook()
+    except Exception as _e:
+        console_log(f"⚠️ Telegram webhook setup error: {_e}", "warning")
 
 
-# ===== ENTRY POINT =====
+# ===== STARTUP CONSOLE MESSAGES (no DB calls — instant) =====
+console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+console_log("🚀 DUBAI FLEA MARKET EVENT TRACKER STARTING...", "info")
+console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+console_log(f"📡 API Endpoint: {API_URL}", "debug")
+console_log(f"⏰ Check Interval: {CONFIG['check_interval_minutes']} minutes", "debug")
+console_log(f"💓 Heartbeat: Every {CONFIG['heartbeat_hours']} hours", "debug")
+console_log(f"📱 Telegram Admin: {'Configured' if TELEGRAM_ADMIN_CHAT_ID else 'Not set'}", "debug")
+console_log(f"📧 Email: {'ON' if CONFIG.get('email_notifications_enabled', True) else 'OFF'}", "debug")
+console_log(f"📡 Telegram: {'ON' if CONFIG.get('telegram_notifications_enabled', True) else 'OFF'}", "debug")
+
+from config import ADMIN_PASSWORD
+if not ADMIN_PASSWORD:
+    console_log("🚨 WARNING: ADMIN_PASSWORD not set!", "error")
+if not CONFIG.get('heartbeat_email'):
+    console_log("⚠️ HEARTBEAT_EMAIL not set.", "warning")
+
+console_log("✅ App module loaded — ready for server to bind port", "success")
+console_log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", "info")
+
+# Launch the SINGLE deferred thread — everything else happens inside it
+threading.Thread(target=_deferred_startup, daemon=True, name='deferred-init').start()
+
+
+# ===== ENTRY POINT (local dev) =====
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
