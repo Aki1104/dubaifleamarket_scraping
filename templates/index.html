@@ -5,33 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dubai Flea Market Intelligence</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <!-- Preconnect to font CDNs for faster loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <!-- Compiled Tailwind CSS (15KB vs 300KB Play CDN JS compiler) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='tailwind.min.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Suppress Tailwind Play CDN advisory — intentionally used for demo/portfolio without a build step -->
-    <script>(function(){var w=console.warn.bind(console);console.warn=function(){if(typeof arguments[0]==='string'&&arguments[0].includes('cdn.tailwindcss.com'))return;w.apply(console,arguments);};})()</script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        display: ['Fraunces', 'serif'],
-                        body: ['Sora', 'sans-serif']
-                    },
-                    colors: {
-                        sand: '#f6f1e8',
-                        ink: '#1d232b',
-                        accent: '#0f766e',
-                        accentDark: '#0a5f5a'
-                    },
-                    boxShadow: {
-                        glow: '0 20px 60px rgba(20, 24, 30, 0.18)'
-                    }
-                }
-            }
-        };
-    </script>
     <style>
         .float-orb { animation: floatOrb 14s ease-in-out infinite; }
         @keyframes floatOrb { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(18px); } }

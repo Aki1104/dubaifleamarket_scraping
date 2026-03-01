@@ -80,6 +80,13 @@ app_backup.py
 *.swp
 *.swo
 
+# Node (Tailwind CSS build tooling — only used locally)
+node_modules/
+package-lock.json
+
+# Tailwind build input (output static/tailwind.min.css IS committed)
+tailwind-input.css
+
 # OS
 .DS_Store
 Thumbs.db

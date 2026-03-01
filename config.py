@@ -28,7 +28,14 @@ except ImportError:
 
 # ===== Flask App =====
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+
+_secret_key = os.environ.get('SECRET_KEY', '')
+if not _secret_key:
+    _secret_key = secrets.token_hex(32)
+    print("[WARNING] SECRET_KEY not set — sessions will be lost on restart. "
+          "Set SECRET_KEY in your environment variables.")
+app.secret_key = _secret_key
+
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
