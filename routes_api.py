@@ -779,29 +779,40 @@ def telegram_webhook():
             welcome = (
                 f"👋 <b>Welcome, {first_name}!</b>\n\n"
                 "🏪 I'm the <b>Dubai Flea Market Tracker Bot</b>.\n"
-                "I'll notify you instantly when new events are posted "
-                "on the Dubai Flea Market website.\n\n"
+                "I watch the Dubai Flea Market website 24/7 and notify you "
+                "the moment a new event is posted.\n\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "📌 <b>Available Commands:</b>\n\n"
-                "/subscribe — Subscribe to event alerts\n"
-                "/unsubscribe — Stop receiving alerts\n"
-                "/status — View bot & tracker stats\n"
-                "/events — See recently tracked events\n"
-                "/help — Show this help message\n"
+                "📌 <b>Commands:</b>\n\n"
+                "/subscribe — Get event alerts\n"
+                "/unsubscribe — Stop alerts\n"
+                "/status — Tracker stats + uptime\n"
+                "/uptime — How long the bot has been running\n"
+                "/events — Recent events with details\n"
+                "/check — Trigger an instant check now\n"
+                "/next — When is the next scheduled check\n"
+                "/myid — Your chat ID\n"
+                "/help — Full command list\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                "💡 <i>Use /subscribe to start getting new event notifications!</i>"
+                "💡 <i>Use /subscribe to start receiving notifications!</i>"
             )
             _tg_reply(chat_id, welcome)
 
         elif cmd == '/help':
             _tg_reply(chat_id, (
-                "ℹ️ <b>Dubai Flea Market Tracker — Help</b>\n\n"
+                "ℹ️ <b>Dubai Flea Market Tracker — All Commands</b>\n\n"
+                "<b>Subscriptions</b>\n"
                 "/subscribe — Subscribe to new event alerts\n"
-                "/unsubscribe — Unsubscribe from alerts\n"
-                "/status — View tracker statistics\n"
-                "/events — See recent events found\n"
+                "/unsubscribe — Unsubscribe from alerts\n\n"
+                "<b>Status</b>\n"
+                "/status — Full tracker stats and uptime\n"
+                "/uptime — How long the bot has been running\n"
+                "/next — When is the next scheduled check\n\n"
+                "<b>Events</b>\n"
+                "/events — See recent tracked events with details\n"
+                "/check — Trigger an instant check right now\n\n"
+                "<b>Info</b>\n"
                 "/myid — Show your Telegram chat ID\n"
-                "/help — Show this help message\n\n"
+                "/help — Show this message\n\n"
                 "🌐 <a href=\"https://dubai-fleamarket.com\">Dubai Flea Market Website</a>"
             ))
 
@@ -848,16 +859,52 @@ def telegram_webhook():
                 sub_count = db_get_subscriber_count()
             except Exception:
                 pass
+            # Calculate uptime
+            uptime_str = 'Unknown'
+            try:
+                from utils import parse_iso_timestamp
+                start = parse_iso_timestamp(CONFIG.get('uptime_start', ''))
+                if start:
+                    delta = datetime.now(timezone.utc) - start
+                    days = delta.days
+                    hours, rem = divmod(delta.seconds, 3600)
+                    minutes = rem // 60
+                    if days > 0:
+                        uptime_str = f"{days}d {hours}h {minutes}m"
+                    elif hours > 0:
+                        uptime_str = f"{hours}h {minutes}m"
+                    else:
+                        uptime_str = f"{minutes}m"
+            except Exception:
+                pass
+            # Next check
+            next_check_str = 'Soon'
+            try:
+                next_raw = CONFIG.get('next_check')
+                if next_raw:
+                    next_dt = parse_iso_timestamp(next_raw)
+                    if next_dt:
+                        diff = int((next_dt - datetime.now(timezone.utc)).total_seconds())
+                        if diff > 0:
+                            next_check_str = f"in {diff // 60}m {diff % 60}s"
+                        else:
+                            next_check_str = 'Running now'
+            except Exception:
+                pass
+            last_check_str = CONFIG.get('last_check') or 'Not yet'
             _tg_reply(chat_id, (
                 "📊 <b>Tracker Status</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"✅ Status: <b>Running</b>\n"
+                f"✅ Status: <b>{'Running' if CONFIG.get('tracker_enabled', True) else 'Paused'}</b>\n"
+                f"⏱ Uptime: <b>{uptime_str}</b>\n"
                 f"🔍 Total checks: {CONFIG.get('total_checks', 0)}\n"
                 f"📦 Events tracked: {len(seen_data.get('event_ids', []))}\n"
                 f"🆕 New events found: {CONFIG.get('total_new_events', 0)}\n"
                 f"📬 Notifications sent: {CONFIG.get('emails_sent', 0)}\n"
                 f"👥 Subscribers: {sub_count}\n"
-                f"⏰ Check interval: Every {CONFIG.get('check_interval_minutes', 15)} min\n\n"
+                f"⏰ Interval: Every {CONFIG.get('check_interval_minutes', 15)} min\n"
+                f"🕐 Last check: {last_check_str}\n"
+                f"⏭ Next check: {next_check_str}\n\n"
                 "🌐 <a href=\"https://dubai-fleamarket.com\">View Events →</a>"
             ))
 
@@ -866,15 +913,99 @@ def telegram_webhook():
             details = seen_data.get('event_details', [])
             if details:
                 recent = details[-5:][::-1]
-                lines = ["📋 <b>Recent Events</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+                lines = [f"📋 <b>Recent Events</b> ({len(details)} total tracked)\n━━━━━━━━━━━━━━━━━━━━━━\n"]
                 for i, ev in enumerate(recent, 1):
-                    title = (ev.get('title') or ev.get('name') or 'Untitled')[:60]
+                    title = (ev.get('title') or ev.get('name') or 'Untitled')[:55]
                     link = ev.get('link') or ev.get('url') or ''
-                    lines.append(f"{i}. <a href=\"{link}\">{title}</a>")
-                lines.append("\n🌐 <a href=\"https://dubai-fleamarket.com\">View All →</a>")
+                    date_posted = ev.get('date_posted') or ev.get('date') or ''
+                    first_seen = ev.get('first_seen') or ''
+                    desc = (ev.get('description') or ev.get('excerpt') or '').strip()
+                    # Strip basic HTML tags from description
+                    import re as _re
+                    desc = _re.sub(r'<[^>]+>', '', desc)[:80].strip()
+                    lines.append(f"\n<b>{i}. <a href=\"{link}\">{title}</a></b>")
+                    if date_posted:
+                        lines.append(f"   📅 Posted: {date_posted}")
+                    if first_seen:
+                        lines.append(f"   👁 Detected: {first_seen}")
+                    if desc:
+                        lines.append(f"   📝 {desc}...")
+                    lines.append(f"   🔗 <a href=\"{link}\">Open Event</a>")
+                    if i < len(recent):
+                        lines.append("   ─ ─ ─ ─ ─ ─ ─ ─")
+                lines.append(f"\n━━━━━━━━━━━━━━━━━━━━━━\n🌐 <a href=\"https://dubai-fleamarket.com\">Browse All Events →</a>")
                 _tg_reply(chat_id, '\n'.join(lines))
             else:
-                _tg_reply(chat_id, "📋 No events tracked yet. Check back soon!")
+                _tg_reply(chat_id, "📋 No events tracked yet. The tracker will notify you as soon as one is found!")
+
+        elif cmd == '/uptime':
+            uptime_str = 'Unknown'
+            try:
+                from utils import parse_iso_timestamp
+                start = parse_iso_timestamp(CONFIG.get('uptime_start', ''))
+                if start:
+                    delta = datetime.now(timezone.utc) - start
+                    days = delta.days
+                    hours, rem = divmod(delta.seconds, 3600)
+                    minutes = rem // 60
+                    if days > 0:
+                        uptime_str = f"{days} day{'s' if days != 1 else ''}, {hours}h {minutes}m"
+                    elif hours > 0:
+                        uptime_str = f"{hours}h {minutes}m"
+                    else:
+                        uptime_str = f"{minutes} minute{'s' if minutes != 1 else ''}"
+            except Exception:
+                pass
+            _tg_reply(chat_id, (
+                f"⏱ <b>Bot Uptime</b>\n\n"
+                f"Running for: <b>{uptime_str}</b>\n"
+                f"Total checks done: {CONFIG.get('total_checks', 0)}"
+            ))
+
+        elif cmd == '/next':
+            next_check_str = 'Unknown'
+            try:
+                from utils import parse_iso_timestamp
+                next_raw = CONFIG.get('next_check')
+                if next_raw:
+                    next_dt = parse_iso_timestamp(next_raw)
+                    if next_dt:
+                        diff = int((next_dt - datetime.now(timezone.utc)).total_seconds())
+                        if diff > 0:
+                            next_check_str = f"{diff // 60}m {diff % 60}s"
+                        else:
+                            next_check_str = 'Running right now'
+            except Exception:
+                pass
+            interval = CONFIG.get('check_interval_minutes', 15)
+            _tg_reply(chat_id, (
+                f"⏭ <b>Next Scheduled Check</b>\n\n"
+                f"Next check: <b>{next_check_str}</b>\n"
+                f"Interval: Every {interval} minutes\n"
+                f"Checks done so far: {CONFIG.get('total_checks', 0)}"
+            ))
+
+        elif cmd == '/check':
+            _tg_reply(chat_id, "🔍 Triggering an instant check now...")
+            try:
+                from events import check_for_events
+                import threading as _threading
+                new_before = CONFIG.get('total_new_events', 0)
+                def _run_check():
+                    try:
+                        check_for_events()
+                        new_after = CONFIG.get('total_new_events', 0)
+                        found = new_after - new_before
+                        if found > 0:
+                            _tg_reply(chat_id, f"✅ Check done! Found <b>{found} new event{'s' if found != 1 else ''}</b>. Notifications sent!")
+                        else:
+                            total = CONFIG.get('total_checks', 0)
+                            _tg_reply(chat_id, f"✅ Check done. No new events found. (🔍 {total} total checks run)")
+                    except Exception as _e:
+                        _tg_reply(chat_id, f"⚠️ Check encountered an error: {str(_e)[:80]}")
+                _threading.Thread(target=_run_check, daemon=True).start()
+            except Exception as e:
+                _tg_reply(chat_id, f"⚠️ Could not trigger check: {str(e)[:80]}")
 
         elif cmd == '/myid':
             _tg_reply(chat_id, f"🆔 Your Telegram Chat ID is:\n<code>{chat_id}</code>")

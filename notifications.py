@@ -194,25 +194,50 @@ def send_telegram_new_events(events: list) -> bool:
 
     now = datetime.now(timezone.utc)
 
-    message = f"""🚨 <b>NEW EVENT ALERT!</b> 🚨
+    import re as _re
 
-🎯 <b>{len(events)} New Dubai Flea Market Event{'s' if len(events) > 1 else ''} Found!</b>
-━━━━━━━━━━━━━━━━━━━━━━
-"""
+    def _clean(text, maxlen=120):
+        """Strip HTML tags and truncate."""
+        if not text:
+            return ''
+        return _re.sub(r'<[^>]+>', '', str(text)).strip()[:maxlen]
+
+    message = (
+        f"\U0001f6a8 <b>NEW EVENT{'S' if len(events) > 1 else ''} DETECTED!</b>\n"
+        f"\U0001f3af <b>{len(events)} new Dubai Flea Market listing{'s' if len(events) > 1 else ''} just went live!</b>\n"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+    )
 
     for i, event in enumerate(events, 1):
-        message += f"\n📍 <b>Event {i}:</b>\n"
-        message += f"   📌 {event['title']}\n"
-        message += f"   🔗 <a href=\"{event['link']}\">View Event →</a>\n"
-        message += f"   📅 Posted: {event['date_posted']}\n"
+        title = _clean(event.get('title', 'Untitled'), 80)
+        link = event.get('link', '')
+        date_posted = _clean(event.get('date_posted', ''), 40)
+        desc = _clean(event.get('description') or event.get('excerpt') or '', 150)
+        categories = event.get('categories') or event.get('tags') or []
+        if isinstance(categories, list):
+            categories = ', '.join(str(c) for c in categories[:3])
+
+        message += f"\n\U0001f4cd <b>Event {i}: {title}</b>\n"
+        if date_posted:
+            message += f"   \U0001f4c5 Posted: {date_posted}\n"
+        if categories:
+            message += f"   \U0001f3f7 Category: {categories}\n"
+        if desc:
+            raw_desc = str(event.get('description') or '')
+            overflow = len(_re.sub(r'<[^>]+>', '', raw_desc).strip()) > 150
+            message += f"   \U0001f4dd {desc}{'...' if overflow else ''}\n"
+        message += f"   \U0001f517 <a href=\"{link}\">Open Event Page</a>\n"
         if i < len(events):
-            message += "\n   ─ ─ ─ ─ ─ ─ ─ ─ ─ ─\n"
+            message += "\n   \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500 \u2500\n"
 
-    message += f"""\n━━━━━━━━━━━━━━━━━━━━━━
-⏰ Detected: {format_multi_timezone(now)}
-📱 Tap the link to view details!
-
-🤖 <i>Dubai Flea Market Tracker</i>"""
+    interval = CONFIG.get('check_interval_minutes', 15)
+    message += (
+        f"\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+        f"\u23f0 Detected: {format_multi_timezone(now)}\n"
+        f"\U0001f50d Next check: in ~{interval} min\n"
+        f"\U0001f4f1 Tap a link above to view full details!\n\n"
+        f"\U0001f916 <i>Dubai Flea Market Tracker</i>"
+    )
 
     console_log(f"📱 Sending Telegram notification for {len(events)} event(s)", "info")
 
