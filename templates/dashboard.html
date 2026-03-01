@@ -617,7 +617,7 @@
                                     <div class="event-card-title">{{ event.title }}</div>
                                     <div class="event-card-meta">
                                         <i class="bi bi-calendar3"></i>
-                                        {{ event.date_posted[:10] if event.date_posted else 'N/A' }}
+                                        {{ event.date_posted or 'N/A' }}
                                     </div>
                                     <a href="{{ event.link }}" target="_blank" class="event-card-link">
                                         <i class="bi bi-box-arrow-up-right"></i>
@@ -714,7 +714,7 @@
                                 <tr>
                                     <td>#{{ event.id }}</td>
                                     <td>{{ event.title[:80] }}{% if event.title|length > 80 %}...{% endif %}</td>
-                                    <td>{{ event.first_seen or event.date_posted or 'N/A' }}</td>
+                                    <td>{{ format_timestamp(event.first_seen) if event.first_seen else (event.date_posted or 'N/A') }}</td>
                                     <td><a class="table-link" href="{{ event.link }}" target="_blank">Open</a></td>
                                 </tr>
                                 {% else %}
@@ -748,7 +748,7 @@
                                 <div class="email-hist-left">
                                     <div class="email-hist-email">{{ entry.recipient_masked }}</div>
                                     <div class="email-hist-subject">{{ entry.subject[:40] }}</div>
-                                    <div class="email-hist-time">{{ entry.timestamp_formatted or entry.timestamp[:16] }}</div>
+                                    <div class="email-hist-time">{{ entry.timestamp_formatted or format_timestamp(entry.timestamp) }}</div>
                                 </div>
                                 <div class="email-hist-status">
                                     <div class="status-dot {% if entry.success %}success{% else %}error{% endif %}"></div>
@@ -783,7 +783,7 @@
                                 <div class="log-dot {{ log.level }}"></div>
                                 <div class="log-content">
                                     <div class="log-message">{{ log.message }}</div>
-                                    <div class="log-time">{{ log.timestamp_formatted or log.timestamp[:16] }}</div>
+                                    <div class="log-time">{{ log.timestamp_formatted or format_timestamp(log.timestamp) }}</div>
                                 </div>
                             </div>
                             {% else %}

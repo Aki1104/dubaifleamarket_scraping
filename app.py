@@ -401,6 +401,12 @@ def process_email_queue():
         if age_hours > MAX_EMAIL_AGE_HOURS:
             console_log(f"⏰ Email expired (>{MAX_EMAIL_AGE_HOURS}h old): {mask_email(item['recipient'])}", "warning")
             log_activity(f"📧 Email expired after {MAX_EMAIL_AGE_HOURS}h: {item['subject'][:30]}...", "error")
+            notify_admin_alert(
+                f"📧 Email permanently failed after {MAX_EMAIL_AGE_HOURS}h of retries.\n"
+                f"To: {mask_email(item['recipient'])}\n"
+                f"Subject: {item['subject'][:50]}",
+                "Email Expired"
+            )
             db_remove_from_queue(item['id'])
             removed += 1
             continue
@@ -1282,58 +1288,12 @@ def send_new_event_email(events):
         notify_admin_alert(f"Email failed for {fail_count} recipient(s) during new event alert.", "Email Delivery Issues")
 
 def send_heartbeat():
-    """Send heartbeat status email. Respects email_notifications_enabled toggle."""
+    """Send heartbeat via Telegram to admin. Confirms bot is alive."""
     if not CONFIG['heartbeat_enabled']:
         return False
     
-    # Send via Telegram first (instant, free, reliable) — if enabled
-    send_telegram_heartbeat()
-    
-    # Check if email notifications are enabled
-    if not CONFIG.get('email_notifications_enabled', True):
-        console_log("📵 Email notifications disabled, skipping heartbeat email", "debug")
-        return False
-    
-    console_log("💓 Sending heartbeat email...", "info")
-    now = datetime.now(timezone.utc)
-    seen_data = load_seen_events()
-    
-    subject = f"💓 Bot Running OK - Check #{CONFIG['total_checks']} | {now.strftime('%H:%M')} UTC"
-    
-    body = f"""
-{'=' * 60}
-💓 DUBAI FLEA MARKET BOT - HEARTBEAT STATUS
-{'=' * 60}
-
-✅ STATUS: Bot is RUNNING and monitoring for new events!
-
-📊 CURRENT STATS:
-   • Check Number: #{CONFIG['total_checks']}
-   • Current Time (UTC): {now.strftime('%B %d, %Y at %I:%M:%S %p')}
-   • Events Already Seen: {len(seen_data.get('event_ids', []))}
-   • Total New Events Found: {CONFIG['total_new_events']}
-   • Emails Sent: {CONFIG['emails_sent']}
-
-⏰ TIMING INFO:
-   • Check Interval: Every {CONFIG['check_interval_minutes']} minutes
-   • Heartbeat Interval: Every {CONFIG['heartbeat_hours']} hours
-   • Uptime Since: {CONFIG['uptime_start']}
-
-🎯 The bot is actively running 24/7!
-
-🔗 Manual Check: https://dubai-fleamarket.com
-
-{'=' * 60}
-🤖 Automated Heartbeat from Dubai Flea Market Tracker
-{'=' * 60}
-"""
-    
-    result = send_email(subject, body, CONFIG['heartbeat_email'])
-    if result:
-        console_log("✅ Heartbeat email sent successfully", "success")
-    else:
-        console_log("❌ Failed to send heartbeat email", "error")
-        notify_admin_alert("Heartbeat email failed. Telegram heartbeat may still be delivered.", "Heartbeat Email Failure")
+    # Heartbeat is Telegram-only (instant, free, reliable)
+    result = send_telegram_heartbeat()
     return result
 
 def send_telegram_daily_summary():
@@ -1500,10 +1460,13 @@ def check_for_events() -> None:
             title = sanitize_string(event.get('title', {}).get('rendered', 'Unknown'), 200)
             console_log(f"   🆕 NEW EVENT DETECTED: {title[:50]}...", "success")
             
+            raw_date = event.get('date', '')
+            date_posted = format_timestamp(raw_date) if raw_date else 'Unknown'
+            
             event_info = {
                 'id': event_id,
                 'title': title,
-                'date_posted': sanitize_string(event.get('date', 'Unknown'), 50),
+                'date_posted': date_posted,
                 'link': link
             }
             new_events.append(event_info)
@@ -3056,9 +3019,13 @@ def test_telegram_real():
 """
         
         for i, event in enumerate(test_events, 1):
-            title = event.get('title', 'Untitled')[:60]
+            raw_title = event.get('title', 'Untitled')
+            if isinstance(raw_title, dict):
+                raw_title = raw_title.get('rendered', 'Untitled')
+            title = sanitize_string(str(raw_title), 60)
             link = event.get('link', '#')
-            date = event.get('date_posted', 'Unknown')
+            raw_date = event.get('date', '') or event.get('date_posted', '')
+            date = format_timestamp(raw_date) if raw_date else 'Unknown'
             message += f"""
 {i}. <b>{title}</b>
    📅 Posted: {date}
