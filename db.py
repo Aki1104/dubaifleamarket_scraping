@@ -23,14 +23,28 @@ from datetime import datetime, timezone, timedelta
 
 from typing import Any
 
-# ---------- Try to import libsql for Turso cloud ----------
-libsql: Any
-try:
-    import libsql_experimental as libsql  # type: ignore[import-unresolved]
-    HAS_LIBSQL = True
-except (ImportError, OSError, Exception) as _imp_err:
-    HAS_LIBSQL = False
-    print(f"[DB] libsql_experimental not available: {_imp_err}")
+# ---------- Lazy libsql import (deferred to first get_connection() call) ----------
+# libsql_experimental is a C extension that can hang on import in some
+# environments. Loading it lazily ensures gunicorn's worker can boot and
+# bind the HTTP port before the extension is touched.
+_libsql: Any = None
+_libsql_loaded = False
+
+
+def _get_libsql():
+    """Lazy-load libsql_experimental on first use. Returns the module or None."""
+    global _libsql, _libsql_loaded
+    if _libsql_loaded:
+        return _libsql
+    _libsql_loaded = True
+    try:
+        import libsql_experimental as _mod  # type: ignore[import-unresolved]
+        _libsql = _mod
+        print("[DB] libsql_experimental loaded successfully")
+    except (ImportError, OSError, Exception) as err:
+        _libsql = None
+        print(f"[DB] libsql_experimental not available: {err}")
+    return _libsql
 
 
 def _connect_turso_with_timeout(url: str, token: str, timeout_sec: int = 10):
@@ -39,10 +53,13 @@ def _connect_turso_with_timeout(url: str, token: str, timeout_sec: int = 10):
     Sets a global socket timeout so even C-level code that holds the GIL
     will be interrupted. Restores the original timeout afterward.
     """
+    lib = _get_libsql()
+    if lib is None:
+        raise RuntimeError("libsql_experimental is not available")
     old_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout_sec)
-        conn = libsql.connect(database=url, auth_token=token)
+        conn = lib.connect(database=url, auth_token=token)
         return conn
     except socket.timeout:
         raise TimeoutError(
@@ -97,7 +114,7 @@ def get_connection():
                 return _conn
 
         # ---- Try Turso cloud first (with timeout to prevent hanging on Render) ----
-        if HAS_LIBSQL and TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
+        if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
             try:
                 _conn = _connect_turso_with_timeout(
                     TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, timeout_sec=10
