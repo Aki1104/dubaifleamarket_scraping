@@ -25,29 +25,25 @@ import socket
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import html
-import hashlib
 import secrets
 import time
 import re
 
 # Database layer — replaces all JSON file storage
 from db import (
-    get_connection, is_using_turso, get_db_status, migrate_from_json,
-    db_load_seen_events, db_load_seen_event_ids, db_save_seen_event,
-    db_save_seen_events_bulk, db_check_event_exists, db_remove_latest_event,
+    get_connection, get_db_status, migrate_from_json,
+    db_load_seen_events, db_save_seen_events_bulk,
     db_get_seen_event_count,
     db_load_status, db_save_status, db_get_status, db_set_status,
     db_add_log, db_get_logs, db_clear_logs,
     db_add_email_history, db_get_email_history,
-    db_add_to_queue, db_get_queue, db_get_queue_item, db_update_queue_item,
+    db_add_to_queue, db_get_queue, db_update_queue_item,
     db_remove_from_queue, db_clear_queue, db_get_queue_count,
-    db_get_queue_high_priority_count,
     db_record_stat, db_get_stats, db_prune_stats,
-    db_get_notification_setting, db_set_notification_setting,
-    db_get_all_notification_settings,
+    db_set_notification_setting, db_get_all_notification_settings,
     db_add_subscriber, db_remove_subscriber, db_toggle_subscriber,
     db_get_subscribers, db_get_active_subscriber_ids,
-    db_update_subscriber_notified, db_get_subscriber_count,
+    db_get_subscriber_count,
     validate_chat_id, mask_chat_id,
     db_add_audit_log, db_get_audit_logs,
 )
@@ -280,9 +276,7 @@ API_URL = "https://dubai-fleamarket.com/wp-json/wp/v2/product?per_page=20"
 
 DATA_DIR = os.environ.get('DATA_DIR', os.path.dirname(os.path.abspath(__file__)))
 # Legacy JSON file paths — data now lives entirely in Turso DB.
-# These constants are kept only so the one-time migration code in db.py
-# can find old files if they still exist.
-_LEGACY_JSON_DIR = DATA_DIR
+# db.py has its own DATA_DIR for the one-time migration code.
 
 # Telegram Bot (FREE - unlimited messages, instant push notifications)
 # Create bot: @BotFather on Telegram, get token
@@ -344,7 +338,6 @@ SYSTEM_CONSOLE = []
 MAX_CONSOLE_LOGS = 200
 
 # ===== EMAIL QUEUE - Persistent retry for failed emails =====
-EMAIL_QUEUE_FILE = None  # Legacy — queue is now DB-backed
 EMAIL_QUEUE = []  # List of {subject, body, recipient, created_at, attempts, next_retry, priority}
 MAX_EMAIL_QUEUE = 50
 EMAIL_RETRY_INTERVALS = [30, 60, 120, 240]  # Minutes: 30min, 1hr, 2hr, 4hr
@@ -359,10 +352,6 @@ def load_email_queue():
     except Exception as e:
         console_log(f"⚠️ Failed to load email queue: {e}", "warning")
         EMAIL_QUEUE = []
-
-def ensure_email_queue_ids():
-    """No-op: database queue items always have IDs."""
-    pass
 
 def load_admin_audit_on_startup():
     global ADMIN_AUDIT_LOGS
@@ -484,7 +473,6 @@ def build_email_queue_payload(limit=None):
     }
 
 # ===== EVENT STATISTICS - DB-backed =====
-EVENT_STATS_FILE = None  # Legacy — stats now in DB
 EVENT_STATS = {'daily': {}, 'hourly': {}}  # In-memory cache (rebuilt from DB on read)
 
 def load_event_stats():
@@ -506,13 +494,6 @@ def load_event_stats():
         console_log(f"⚠️ Failed to load event stats: {e}", "warning")
         EVENT_STATS = {'daily': {}, 'hourly': {}}
     return EVENT_STATS
-
-def save_event_stats():
-    """Prune old stats from DB. Individual writes happen in record_stat()."""
-    try:
-        db_prune_stats()
-    except Exception as e:
-        console_log(f"⚠️ Failed to prune event stats: {e}", "warning")
 
 def record_stat(stat_type, value=1):
     """Record a statistic (checks, new_events, emails_sent) to DB."""
@@ -662,10 +643,6 @@ def load_email_history():
     except Exception:
         return []
 
-def save_email_history(history):
-    """No-op: email history is now written directly to DB."""
-    pass
-
 def add_to_email_history(recipient, subject, success, error_msg=''):
     """Add entry to email history in database."""
     try:
@@ -731,17 +708,6 @@ def log_activity(message: str, level: str = "info") -> None:
         print(f"[{level.upper()}] {message}")
     except (UnicodeEncodeError, UnicodeDecodeError):
         pass
-
-def load_admin_audit():
-    """Load admin audit log from database."""
-    try:
-        return db_get_audit_logs(300)
-    except Exception:
-        return []
-
-def save_admin_audit(entries):
-    """No-op: admin audit is now written directly to DB."""
-    pass
 
 def log_admin_action(action, details=None):
     """Record an admin action for auditing (DB-backed)."""
@@ -1146,35 +1112,6 @@ def send_telegram(message: str, chat_id: str = None) -> tuple:
         log_activity(f"📱 Telegram sent to {success_count}/{len(chat_ids)} chat(s)", "success")
         if failed_ids:
             log_activity(f"⚠️ Telegram failed for {len(failed_ids)} chat(s)", "warning")
-        return True, None
-    return False, last_error
-
-def send_telegram_to_admin(message):
-    """Send message to admin chat ID ONLY. Used for errors, heartbeat, status."""
-    admin_id = get_admin_chat_id()
-    if not admin_id:
-        console_log("⚠️ No admin chat ID configured for admin-only message", "debug")
-        return False, "No admin chat ID"
-    return send_telegram(message, chat_id=admin_id)
-
-def send_telegram_to_subscribers(message):
-    """Send message to regular subscribers ONLY (excludes admin to avoid duplicates).
-    Use this for new event alerts that admin also receives via send_telegram_new_events."""
-    regular_ids = get_regular_chat_ids()
-    if not regular_ids:
-        console_log("⚠️ No regular subscriber chat IDs configured", "debug")
-        return False, "No subscriber chat IDs"
-    
-    success_count = 0
-    last_error = None
-    for cid in regular_ids:
-        ok, err = send_telegram(message, chat_id=cid)
-        if ok:
-            success_count += 1
-        else:
-            last_error = err
-    
-    if success_count > 0:
         return True, None
     return False, last_error
 
@@ -1997,6 +1934,20 @@ def api_status():
         except Exception:
             pass
     
+    # Build recent events from seen_data
+    recent_events = []
+    event_details = seen_data.get('event_details', [])
+    if isinstance(event_details, list) and event_details:
+        for event in event_details[-6:][::-1]:
+            if not isinstance(event, dict):
+                continue
+            recent_events.append({
+                'id': event.get('id') or event.get('event_id'),
+                'title': event.get('title') or event.get('name'),
+                'first_seen': event.get('first_seen') or event.get('timestamp'),
+                'link': event.get('link') or event.get('url')
+            })
+    
     return jsonify({
         'config': CONFIG,
         'status': status,
@@ -2738,6 +2689,10 @@ def clear_logs():
     """Clear activity logs - requires password."""
     global ACTIVITY_LOGS
     ACTIVITY_LOGS = []
+    try:
+        db_clear_logs()
+    except Exception as e:
+        console_log(f"⚠️ Failed to clear DB logs: {e}", "warning")
     log_activity("🗑️ Logs cleared", "info")
     console_log("🗑️ Activity logs cleared by admin", "info")
     return jsonify({'success': True})
@@ -3163,7 +3118,10 @@ def clear_email_queue():
     global EMAIL_QUEUE
     cleared = len(EMAIL_QUEUE)
     EMAIL_QUEUE = []
-    save_email_queue()
+    try:
+        db_clear_queue()
+    except Exception as e:
+        console_log(f"⚠️ Failed to clear DB queue: {e}", "warning")
     log_admin_action('email_queue_clear', f"cleared={cleared}")
     return jsonify({'success': True, 'cleared': cleared})
 

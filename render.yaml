@@ -42,6 +42,11 @@ services:
       # Security
       - key: ADMIN_PASSWORD
         sync: false  # REQUIRED - set a strong password
+      # Turso Database (REQUIRED for persistent data storage)
+      - key: TURSO_DATABASE_URL
+        sync: false  # libsql://your-db.turso.io
+      - key: TURSO_AUTH_TOKEN
+        sync: false  # Auth token from turso db tokens create
       # Check Interval
       - key: CHECK_INTERVAL
         value: "15"
