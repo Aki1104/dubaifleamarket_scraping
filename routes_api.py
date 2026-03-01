@@ -106,6 +106,7 @@ def api_public_stats():
     return jsonify({
         'total_checks': CONFIG.get('total_checks', 0),
         'emails_sent': CONFIG.get('emails_sent', 0),
+        'telegram_messages_sent': CONFIG.get('telegram_messages_sent', 0),
         'seen_count': len(seen_data.get('event_ids', [])),
         'email_queue_count': len(config.EMAIL_QUEUE),
         'latest_event': get_latest_event_summary(),
