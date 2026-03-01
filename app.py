@@ -17,6 +17,7 @@ Module layout:
 """
 
 import os
+import threading
 from datetime import datetime, timezone
 
 # Load .env file so credentials are available before anything else
@@ -59,84 +60,99 @@ from db import (
 )
 
 
-# ===== LOAD PERSISTED STATE =====
-load_logs()
-load_recipient_status()
-load_event_stats()
-load_admin_audit_on_startup()
+# ===== LOAD PERSISTED STATE (with total timeout to prevent Render hang) =====
+def _init_db_and_state():
+    """All DB-dependent startup work. Runs in a thread with a hard timeout
+    so the app can begin serving even if the database is unreachable."""
+    load_logs()
+    load_recipient_status()
+    load_event_stats()
+    load_admin_audit_on_startup()
 
-# Restore runtime counters from DB so they survive restarts
-from state import load_status as _load_status
-try:
-    _saved_status = _load_status()
-    for _key in ('total_checks', 'total_new_events', 'emails_sent'):
-        _val = _saved_status.get(_key)
-        if _val is not None:
-            try:
-                CONFIG[_key] = int(_val)
-            except (ValueError, TypeError):
-                pass
-    console_log(
-        f"📊 Restored counters: checks={CONFIG['total_checks']}, "
-        f"events={CONFIG['total_new_events']}, emails={CONFIG['emails_sent']}",
-        "debug",
-    )
-except Exception as _e:
-    console_log(f"⚠️ Could not restore counters from DB: {_e}", "warning")
+    # Restore runtime counters from DB so they survive restarts
+    from state import load_status as _load_status
+    try:
+        _saved_status = _load_status()
+        for _key in ('total_checks', 'total_new_events', 'emails_sent'):
+            _val = _saved_status.get(_key)
+            if _val is not None:
+                try:
+                    CONFIG[_key] = int(_val)
+                except (ValueError, TypeError):
+                    pass
+        console_log(
+            f"📊 Restored counters: checks={CONFIG['total_checks']}, "
+            f"events={CONFIG['total_new_events']}, emails={CONFIG['emails_sent']}",
+            "debug",
+        )
+    except Exception as _e:
+        console_log(f"⚠️ Could not restore counters from DB: {_e}", "warning")
 
-# ===== DATABASE INITIALIZATION =====
-try:
-    _db_conn = get_connection()  # initializes tables on first call
-    _db_info = get_db_status()
-    console_log(f"\U0001f5c4\ufe0f Database: {_db_info.get('backend', 'unknown')} - Connected", "success")
-except Exception as _db_err:
-    console_log(f"\u26a0\ufe0f Database init failed: {_db_err} - falling back to JSON", "error")
+    # Database initialization
+    try:
+        _db_conn = get_connection()  # initializes tables on first call
+        _db_info = get_db_status()
+        console_log(f"\U0001f5c4\ufe0f Database: {_db_info.get('backend', 'unknown')} - Connected", "success")
+    except Exception as _db_err:
+        console_log(f"\u26a0\ufe0f Database init failed: {_db_err} - falling back to JSON", "error")
 
-# Load notification toggle settings from DB into CONFIG
-try:
-    all_settings = db_get_all_notification_settings()
-    for key, enabled in all_settings.items():
-        CONFIG[key] = enabled
-    console_log(
-        f"\U0001f514 Notification settings loaded: "
-        f"email={CONFIG.get('email_notifications_enabled', True)}, "
-        f"telegram={CONFIG.get('telegram_notifications_enabled', True)}",
-        "debug",
-    )
-except Exception:
-    pass  # Defaults already set in CONFIG
+    # Load notification toggle settings from DB into CONFIG
+    try:
+        all_settings = db_get_all_notification_settings()
+        for key, enabled in all_settings.items():
+            CONFIG[key] = enabled
+        console_log(
+            f"\U0001f514 Notification settings loaded: "
+            f"email={CONFIG.get('email_notifications_enabled', True)}, "
+            f"telegram={CONFIG.get('telegram_notifications_enabled', True)}",
+            "debug",
+        )
+    except Exception:
+        pass  # Defaults already set in CONFIG
 
-# One-time migration from JSON to DB (safe to run multiple times)
-try:
-    _migration_marker = os.path.join(DATA_DIR, '.migrated_to_db')
-    if not os.path.exists(_migration_marker):
-        _summary = migrate_from_json(DATA_DIR)
-        if _summary.get('migrated'):
-            console_log(f"\U0001f4e6 JSON->DB migration complete: {_summary['migrated']}", "success")
-            with open(_migration_marker, 'w') as _f:
-                _f.write(datetime.now(timezone.utc).isoformat())
-        if _summary.get('errors'):
-            for _err in _summary['errors']:
-                console_log(f"\u26a0\ufe0f Migration warning: {_err}", "warning")
-except Exception as _mig_err:
-    console_log(f"\u26a0\ufe0f Migration check failed: {_mig_err}", "warning")
+    # One-time migration from JSON to DB (safe to run multiple times)
+    try:
+        _migration_marker = os.path.join(DATA_DIR, '.migrated_to_db')
+        if not os.path.exists(_migration_marker):
+            _summary = migrate_from_json(DATA_DIR)
+            if _summary.get('migrated'):
+                console_log(f"\U0001f4e6 JSON->DB migration complete: {_summary['migrated']}", "success")
+                with open(_migration_marker, 'w') as _f:
+                    _f.write(datetime.now(timezone.utc).isoformat())
+            if _summary.get('errors'):
+                for _err in _summary['errors']:
+                    console_log(f"\u26a0\ufe0f Migration warning: {_err}", "warning")
+    except Exception as _mig_err:
+        console_log(f"\u26a0\ufe0f Migration check failed: {_mig_err}", "warning")
 
-# Seed env-configured Telegram chat IDs into the DB so they appear in the
-# subscriber list and get used for notifications even without manual "add".
-try:
-    _seeded = 0
-    for _raw_id in (TELEGRAM_CHAT_IDS or '').split(','):
-        _cid = _raw_id.strip()
-        if _cid and validate_chat_id(_cid):
-            if db_add_subscriber(_cid, 'Env Config', added_by='env'):
+    # Seed env-configured Telegram chat IDs into the DB
+    try:
+        _seeded = 0
+        for _raw_id in (TELEGRAM_CHAT_IDS or '').split(','):
+            _cid = _raw_id.strip()
+            if _cid and validate_chat_id(_cid):
+                if db_add_subscriber(_cid, 'Env Config', added_by='env'):
+                    _seeded += 1
+        if TELEGRAM_ADMIN_CHAT_ID and validate_chat_id(TELEGRAM_ADMIN_CHAT_ID):
+            if db_add_subscriber(TELEGRAM_ADMIN_CHAT_ID, 'Admin', added_by='env'):
                 _seeded += 1
-    if TELEGRAM_ADMIN_CHAT_ID and validate_chat_id(TELEGRAM_ADMIN_CHAT_ID):
-        if db_add_subscriber(TELEGRAM_ADMIN_CHAT_ID, 'Admin', added_by='env'):
-            _seeded += 1
-    if _seeded:
-        console_log(f"\U0001f4f1 Seeded {_seeded} Telegram subscriber(s) from env", "success")
-except Exception as _seed_err:
-    console_log(f"\u26a0\ufe0f Telegram subscriber seeding failed: {_seed_err}", "warning")
+        if _seeded:
+            console_log(f"\U0001f4f1 Seeded {_seeded} Telegram subscriber(s) from env", "success")
+    except Exception as _seed_err:
+        console_log(f"\u26a0\ufe0f Telegram subscriber seeding failed: {_seed_err}", "warning")
+
+
+# Run DB init with a 30-second hard timeout
+_DB_INIT_TIMEOUT = 30
+_init_thread = threading.Thread(target=_init_db_and_state, daemon=True)
+_init_thread.start()
+_init_thread.join(timeout=_DB_INIT_TIMEOUT)
+if _init_thread.is_alive():
+    console_log(
+        f"⚠️ DB initialization still running after {_DB_INIT_TIMEOUT}s — "
+        "app will start with defaults and retry in background",
+        "warning",
+    )
 
 
 # ===== STARTUP CONSOLE MESSAGES =====

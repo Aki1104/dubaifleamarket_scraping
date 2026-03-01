@@ -17,6 +17,7 @@ Security:
 import os
 import sqlite3
 import secrets
+import threading
 from datetime import datetime, timezone, timedelta
 
 # ---------- Try to import libsql for Turso cloud ----------
@@ -25,6 +26,36 @@ try:
     HAS_LIBSQL = True
 except ImportError:
     HAS_LIBSQL = False
+
+
+def _connect_turso_with_timeout(url: str, token: str, timeout_sec: int = 10):
+    """
+    Attempt a Turso connection with a hard timeout.
+    libsql.connect() has no built-in timeout, so we run it in a thread
+    and abort if it doesn't complete in `timeout_sec` seconds.
+    Returns the connection object, or raises TimeoutError / Exception.
+    """
+    result = [None]
+    error = [None]
+
+    def _do_connect():
+        try:
+            result[0] = libsql.connect(database=url, auth_token=token)
+        except Exception as e:
+            error[0] = e
+
+    t = threading.Thread(target=_do_connect, daemon=True)
+    t.start()
+    t.join(timeout=timeout_sec)
+
+    if t.is_alive():
+        raise TimeoutError(
+            f"Turso connection timed out after {timeout_sec}s — "
+            "falling back to local SQLite"
+        )
+    if error[0] is not None:
+        raise error[0]
+    return result[0]
 
 # ---------- Configuration ----------
 TURSO_DATABASE_URL = os.environ.get('TURSO_DATABASE_URL', '')
@@ -57,9 +88,20 @@ def get_connection():
     global _conn, _using_turso, _db_initialized
 
     if _conn is not None and _db_initialized:
-        # Health check: verify the connection is still alive
+        # Health check: verify the connection is still alive (with timeout)
         try:
-            _conn.execute("SELECT 1")
+            _health_ok = [False]
+            def _hc():
+                try:
+                    _conn.execute("SELECT 1")
+                    _health_ok[0] = True
+                except Exception:
+                    pass
+            _hc_thread = threading.Thread(target=_hc, daemon=True)
+            _hc_thread.start()
+            _hc_thread.join(timeout=5)
+            if not _health_ok[0]:
+                raise Exception("Health check failed or timed out")
         except Exception:
             print("[DB] Connection health check failed, reconnecting...")
             _conn = None
@@ -68,18 +110,20 @@ def get_connection():
         else:
             return _conn
 
-    # ---- Try Turso cloud first ----
+    # ---- Try Turso cloud first (with timeout to prevent hanging on Render) ----
     if HAS_LIBSQL and TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
         try:
-            _conn = libsql.connect(
-                database=TURSO_DATABASE_URL,
-                auth_token=TURSO_AUTH_TOKEN
+            _conn = _connect_turso_with_timeout(
+                TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, timeout_sec=10
             )
             _using_turso = True
             _init_tables(_conn)
             _db_initialized = True
             print("[DB] Connected to Turso cloud database")
             return _conn
+        except TimeoutError as e:
+            print(f"[DB] {e}")
+            _conn = None
         except Exception as e:
             print(f"[DB] Turso connection failed: {str(e)[:100]}, falling back to local SQLite")
             _conn = None
