@@ -142,15 +142,14 @@ def _init_db_and_state():
         console_log(f"\u26a0\ufe0f Telegram subscriber seeding failed: {_seed_err}", "warning")
 
 
-# Run DB init with a 30-second hard timeout
-_DB_INIT_TIMEOUT = 30
+# Run DB init in background so gunicorn can bind the port immediately.
+# The app will serve with defaults until the DB catches up.
 _init_thread = threading.Thread(target=_init_db_and_state, daemon=True)
 _init_thread.start()
-_init_thread.join(timeout=_DB_INIT_TIMEOUT)
+_init_thread.join(timeout=15)  # Wait up to 15s; if not done, continue anyway
 if _init_thread.is_alive():
     console_log(
-        f"⚠️ DB initialization still running after {_DB_INIT_TIMEOUT}s — "
-        "app will start with defaults and retry in background",
+        "⚠️ DB initialization still running — app starting with defaults",
         "warning",
     )
 

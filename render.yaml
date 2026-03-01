@@ -16,7 +16,7 @@ services:
     region: oregon  # or singapore, frankfurt, ohio
     plan: free
     buildCommand: pip install -r requirements-render.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120
     envVars:
       # Email Configuration (set these in Render dashboard -> Environment)
       - key: MY_EMAIL

@@ -67,6 +67,7 @@ LOCAL_DB_PATH = os.path.join(DATA_DIR, 'local_data.db')
 _conn = None
 _using_turso = False
 _db_initialized = False
+_conn_lock = threading.Lock()
 
 
 def _now_iso() -> str:
@@ -87,60 +88,50 @@ def get_connection():
     """
     global _conn, _using_turso, _db_initialized
 
-    if _conn is not None and _db_initialized:
-        # Health check: verify the connection is still alive (with timeout)
-        try:
-            _health_ok = [False]
-            def _hc():
-                try:
-                    _conn.execute("SELECT 1")
-                    _health_ok[0] = True
-                except Exception:
-                    pass
-            _hc_thread = threading.Thread(target=_hc, daemon=True)
-            _hc_thread.start()
-            _hc_thread.join(timeout=5)
-            if not _health_ok[0]:
-                raise Exception("Health check failed or timed out")
-        except Exception:
-            print("[DB] Connection health check failed, reconnecting...")
-            _conn = None
-            _db_initialized = False
-            # Fall through to reconnect
-        else:
-            return _conn
+    with _conn_lock:
+        if _conn is not None and _db_initialized:
+            # Health check: verify the connection is still alive
+            try:
+                _conn.execute("SELECT 1")
+            except Exception:
+                print("[DB] Connection health check failed, reconnecting...")
+                _conn = None
+                _db_initialized = False
+                # Fall through to reconnect
+            else:
+                return _conn
 
-    # ---- Try Turso cloud first (with timeout to prevent hanging on Render) ----
-    if HAS_LIBSQL and TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
+        # ---- Try Turso cloud first (with timeout to prevent hanging on Render) ----
+        if HAS_LIBSQL and TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
+            try:
+                _conn = _connect_turso_with_timeout(
+                    TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, timeout_sec=10
+                )
+                _using_turso = True
+                _init_tables(_conn)
+                _db_initialized = True
+                print("[DB] Connected to Turso cloud database")
+                return _conn
+            except TimeoutError as e:
+                print(f"[DB] {e}")
+                _conn = None
+            except Exception as e:
+                print(f"[DB] Turso connection failed: {str(e)[:100]}, falling back to local SQLite")
+                _conn = None
+
+        # ---- Fallback: local SQLite ----
         try:
-            _conn = _connect_turso_with_timeout(
-                TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, timeout_sec=10
-            )
-            _using_turso = True
+            _conn = sqlite3.connect(LOCAL_DB_PATH, check_same_thread=False)
+            _conn.execute("PRAGMA journal_mode=WAL")  # Better concurrent access
+            _conn.execute("PRAGMA busy_timeout=5000")  # Wait 5s if locked
+            _using_turso = False
             _init_tables(_conn)
             _db_initialized = True
-            print("[DB] Connected to Turso cloud database")
+            print(f"[DB] Connected to local SQLite: {LOCAL_DB_PATH}")
             return _conn
-        except TimeoutError as e:
-            print(f"[DB] {e}")
-            _conn = None
         except Exception as e:
-            print(f"[DB] Turso connection failed: {str(e)[:100]}, falling back to local SQLite")
-            _conn = None
-
-    # ---- Fallback: local SQLite ----
-    try:
-        _conn = sqlite3.connect(LOCAL_DB_PATH, check_same_thread=False)
-        _conn.execute("PRAGMA journal_mode=WAL")  # Better concurrent access
-        _conn.execute("PRAGMA busy_timeout=5000")  # Wait 5s if locked
-        _using_turso = False
-        _init_tables(_conn)
-        _db_initialized = True
-        print(f"[DB] Connected to local SQLite: {LOCAL_DB_PATH}")
-        return _conn
-    except Exception as e:
-        print(f"[DB] CRITICAL: Could not connect to any database: {e}")
-        raise
+            print(f"[DB] CRITICAL: Could not connect to any database: {e}")
+            raise
 
 
 def is_using_turso() -> bool:
