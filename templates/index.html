@@ -388,14 +388,14 @@
     <footer class="py-8 text-center text-sm text-slate-500">
         <!-- Developer Section -->
         <div class="mx-4 mb-10 overflow-hidden rounded-3xl border border-black/5 bg-white text-left shadow-glow sm:mx-auto sm:max-w-2xl dark:border-slate-700/40 dark:bg-slate-900/80">
-            <div class="flex flex-col sm:flex-row">
+            <div class="grid grid-cols-1 sm:grid-cols-[10rem_1fr]">
 
-                <!-- Photo panel -->
-                <div class="relative flex-shrink-0 bg-gradient-to-br from-emerald-600 to-sky-400 sm:w-44">
+                <!-- Photo panel — top banner on mobile, left column on sm+ -->
+                <div class="relative aspect-[3/1] bg-gradient-to-br from-emerald-600 to-sky-400 sm:aspect-auto sm:min-h-full">
                     <img
                         src="{{ url_for('static', filename='assets/images/aki1104profile.png') }}"
                         alt="Aki1104"
-                        class="h-48 w-full object-cover object-top sm:h-full sm:w-44"
+                        class="absolute inset-0 h-full w-full object-cover object-top"
                         onerror="this.parentElement.classList.add('photo-fallback');"
                         id="dev-profile-img"
                     >
@@ -404,7 +404,7 @@
                 </div>
 
                 <!-- Content panel -->
-                <div class="flex flex-1 flex-col justify-center gap-3 p-6 sm:p-8" style="margin-bottom: 10px;">
+                <div class="flex flex-col justify-center gap-3 p-6 sm:p-8">
                     <div>
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-display text-xl font-semibold text-ink dark:text-slate-100">Aki1104</span>
